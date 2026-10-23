@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roadmap — Grapple Mod Loader</title>
+<meta name="description" content="What works in Grapple Mod Loader today, what is open with concrete research leads, what is planned without promises, and what is deliberately out of scope.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Roadmap — Grapple Mod Loader">
+<meta property="og:description" content="Verified features, open research leads, ideas and non-goals for Grapple Mod Loader.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="../index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="../features.html">Features</a>
+    <a href="index.html" aria-current="page">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="../index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="docs-shell">
+  <aside class="docs-sidebar">
+    <p class="docs-label">DOCUMENTATION</p>
+    <nav class="docs-nav" aria-label="Documentation">
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a href="mod-format.html">Mod format</a>
+      <a href="api.html">C++ API</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="research.html">Signatures &amp; research</a>
+      <a href="roadmap.html" aria-current="page">Roadmap</a>
+    </nav>
+    <a class="docs-source" href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/docs">SOURCE DOCS ↗</a>
+  </aside>
+
+  <article class="docs-content">
+    <p class="crumbs"><a href="index.html">Docs</a> / Roadmap</p>
+    <p class="eyebrow">DOCS // STATUS</p>
+    <h1>Roadmap</h1>
+    <p class="lead">
+      What works, what is open with concrete leads, what is merely planned, and what is
+      deliberately out of scope. Everything in "working" has been demonstrated in game on this
+      build. There are no ETAs — this is a personal loader project.
+    </p>
+
+    <div class="prose">
+      <h2 id="working">Working now</h2>
+      <div class="grid">
+        <article class="card">
+          <div class="num">01</div>
+          <h3>Loader chain</h3>
+          <p><code>dinput8.dll</code> proxy → GML.Core → four sample mods, all hot-reloadable.</p>
+        </article>
+        <article class="card">
+          <div class="num">02</div>
+          <h3>Console and overlay</h3>
+          <p>In-game console (<span class="kbd">`</span>), external console, transparent overlay,
+          scrollback, <code>help</code>.</p>
+        </article>
+        <article class="card">
+          <div class="num">03</div>
+          <h3>Input gating</h3>
+          <p>DirectInput neutralised, <code>GetCursorPos</code> frozen, window messages swallowed
+          while panels are open.</p>
+        </article>
+        <article class="card">
+          <div class="num">04</div>
+          <h3>Player chain</h3>
+          <p><code>GetPosition</code> / <code>SetPosition</code> / <code>GetHealth</code> through
+          the public API.</p>
+        </article>
+        <article class="card">
+          <div class="num">05</div>
+          <h3>Teleport that sticks</h3>
+          <p><code>tp.set x y z</code> through the interaction-context world matrix — the engine
+          keeps the new transform.</p>
+        </article>
+        <article class="card">
+          <div class="num">06</div>
+          <h3>Prop spawn</h3>
+          <p>By model name; asynchronous handles recorded and listed by
+          <code>prop.status</code>.</p>
+        </article>
+        <article class="card">
+          <div class="num">07</div>
+          <h3>Spawn menu</h3>
+          <p>Numpad 0. A 795-name catalog in a fresh session — 195 vehicles, 84 weapons,
+          516 misc — sorted, source-tagged and growing via runtime harvest.</p>
+        </article>
+        <article class="card">
+          <div class="num">08</div>
+          <h3>Borderless window</h3>
+          <p>F11 toggle with exact style/rect save and restore, per-monitor.</p>
+        </article>
+        <article class="card">
+          <div class="num">09</div>
+          <h3>Signature database</h3>
+          <p>Build-keyed, verify-checked entries; unknown builds degrade to
+          <code>GML_ERR_NOT_RESOLVED</code> instead of crashing.</p>
+        </article>
+        <article class="card">
+          <div class="num">10</div>
+          <h3>Crash handler</h3>
+          <p>Minidumps plus a report written beside the logs.</p>
+        </article>
+      </div>
+
+      <h2 id="open">Open — with leads</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Item</th><th scope="col">Lead</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Entity::Destroy</code> / <code>prop.destroy</code></td>
+              <td>Engine console commands <code>despawn.chars</code> / <code>despawn.cars</code> are
+              registered at <code>0x140DF4CE0</code> (name strings at
+              <code>0x1424AB788</code> / <code>0x1424AB798</code>). Objects are held by
+              <code>boost::shared_ptr</code> with an <code>SGameObjectDestroyer</code> deleter,
+              and a <code>CDespawnPool</code> reacts to Havok body removal. Full notes:
+              <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/RE_PLAYER_CHAIN.md">RE_PLAYER_CHAIN.md</a> §9.6.</td>
+            </tr>
+            <tr>
+              <td>Vehicle teleport</td>
+              <td>While driving, the character's interaction chain is absent; it runs only while
+              attached. Watchpoint the vehicle's applied transform and walk up to its source,
+              the same way the character teleport was found.</td>
+            </tr>
+            <tr>
+              <td><code>Player::GetVelocity</code> / aim / grapple state</td>
+              <td>Shape searches exist (<code>tools/find_getters.py</code>); player object offsets
+              are already mapped by SigHunter's probe.</td>
+            </tr>
+            <tr>
+              <td>Spawn-menu search box</td>
+              <td>The panel is keyboard-driven; a type-to-filter line over the current category is
+              the obvious next UX step.</td>
+            </tr>
+            <tr>
+              <td>Mouse selection in the spawn menu</td>
+              <td>The overlay has no cursor yet; needs a drawn cursor plus hit testing in the
+              Present pass.</td>
+            </tr>
+            <tr>
+              <td>Spawn-at-crosshair</td>
+              <td>Find the aim position on this build (likely a <code>CSteeringPlayer</code>
+              field) and offer "spawn where I look".</td>
+            </tr>
+            <tr>
+              <td>Weapon-in-hand from the menu</td>
+              <td>Spawning a weapon object is not equipping it; needs the inventory/equip path,
+              not researched yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="ideas">Ideas (not started, no promises)</h2>
+      <ul>
+        <li><strong>Lua scripting layer</strong> (<code>GRAPPLELUA</code>) — only if someone needs
+        it beyond what console commands already cover. The C ABI is the stable surface.</li>
+        <li><strong>World editor</strong> — would first need <code>World::*</code> signatures
+        (streaming, weather, time of day), all unresolved today.</li>
+      </ul>
+
+      <h2 id="non-goals">Non-goals</h2>
+      <ul>
+        <li>Multiplayer anything.</li>
+        <li>Supporting exe builds other than the one installed here without re-research per
+        entry (the signature system is the mechanism; someone has to do the work per build).</li>
+        <li>Patching game code pages for gameplay changes — hooks are for observation and input;
+        transforms go through data.</li>
+      </ul>
+
+      <div class="note warn">
+        <p>
+          <strong>No promises.</strong> This page reflects one person's work on one exe build,
+          not a product roadmap. Features marked unresolved will stay that way until someone
+          researches a signature and proves it in game.
+        </p>
+      </div>
+
+      <p class="doc-meta">
+        Source: <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/ROADMAP.md">docs/ROADMAP.md</a>.
+        Verified against build <code>0x5787641C</code>.
+      </p>
+
+      <div class="pager">
+        <a href="research.html">← SIGNATURES &amp; RESEARCH</a>
+        <a class="next" href="index.html">DOCS OVERVIEW →</a>
+      </div>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="../features.html">FEATURES</a> //
+    <a href="../index.html">HOME</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>

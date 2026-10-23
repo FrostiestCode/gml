@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Signatures &amp; research — Grapple Mod Loader</title>
+<meta name="description" content="Why every game address in Grapple Mod Loader comes from a build-keyed signature database, the status ladder, the entry inventory, and the rules for adding one.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Signatures &amp; research — Grapple Mod Loader">
+<meta property="og:description" content="The signature database, status ladder, research rules and tooling behind Grapple Mod Loader.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="../index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="../features.html">Features</a>
+    <a href="index.html" aria-current="page">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="../index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="docs-shell">
+  <aside class="docs-sidebar">
+    <p class="docs-label">DOCUMENTATION</p>
+    <nav class="docs-nav" aria-label="Documentation">
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a href="mod-format.html">Mod format</a>
+      <a href="api.html">C++ API</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="research.html" aria-current="page">Signatures &amp; research</a>
+      <a href="roadmap.html">Roadmap</a>
+    </nav>
+    <a class="docs-source" href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/docs">SOURCE DOCS ↗</a>
+  </aside>
+
+  <article class="docs-content">
+    <p class="crumbs"><a href="index.html">Docs</a> / Signatures &amp; research</p>
+    <p class="eyebrow">DOCS // RESEARCH</p>
+    <h1>Signatures &amp; research</h1>
+    <p class="lead">
+      No address ships without a signature, and no signature is trusted unless it matches this
+      exe build and byte-verifies at load. This is how GML keeps game addresses honest across
+      builds.
+    </p>
+
+    <div class="prose">
+      <h2 id="why">Why signatures</h2>
+      <p>
+        Function addresses move between builds, and hard-coded addresses are how mods crash
+        other people's games. GML therefore resolves everything at load time from a build-keyed
+        signature database, and refuses to use an entry researched against a different build.
+        The installed exe is one specific build — <code>SizeOfImage 0x3241000</code>,
+        <code>TimeDateStamp 0x5787641C</code> (SHA-256 recorded in
+        <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/MODDING_PLAN.md">MODDING_PLAN.md</a>).
+      </p>
+      <p>
+        Each entry stores <em>how to find</em> an address — module, section, byte pattern,
+        optional RIP-relative operand, dereference chain and verification bytes — not the
+        address itself. Resolution runs once at boot; if the running exe's fingerprint does not
+        match the entry's build key, the entry resolves to nothing and callers get
+        <code>GML_ERR_NOT_RESOLVED</code>.
+      </p>
+
+      <h2 id="schema">Schema</h2>
+      <pre><code>{
+  "name": "SpawnSystem::Spawn",     // unique key; code asks for it by name
+  "kind": "function",               // function | pointer | rip | read | ...
+  "access": "call",                 // call | read | readPointer | rip | none
+  "module": "",                     // "" = the main exe
+  "section": ".text",               // where the pattern is scanned
+  "pattern": "48 8B C4 57 ...",    // IDA-style bytes; ?? = wildcard
+  "rip": null,                      // {operandOffset, instructionSize} when the pattern
+                                    //   lands on a rip-relative reference to the target
+  "deref": [],                      // follow-up pointer reads, if any
+  "object": "", "objectOffset": 0,  // for instance-based entries
+  "verify": "48 8B C4 57 ...",      // bytes that must exist at the resolved address
+  "build": { "imageSize": 52695040, "timestamp": 1468490780 },
+  "status": "verified",             // verified | experimental | unresolved
+  "source": "static analysis 2026-10-19: ...",
+  "note": "what this is and the evidence"
+}</code></pre>
+      <p>
+        Resolution (<code>core/SignatureDb.cpp</code>): scan the section for the pattern (it
+        must be unique), apply RIP extraction if present, follow the dereference chain, then
+        check the verification bytes. The entry's <code>source</code> and <code>note</code>
+        fields record where the pattern came from and why it exists — there are no anonymous
+        offsets.
+      </p>
+
+      <h2 id="status">Status ladder</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Status</th><th scope="col">Meaning</th><th scope="col">What it lets you do</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge no">Unresolved</span></td>
+              <td>No entry yet, or the pattern is not recorded.</td>
+              <td>Any feature that needs it reports <code>GML_ERR_NOT_RESOLVED</code> and names the entry. The honest default.</td>
+            </tr>
+            <tr>
+              <td><span class="badge wip">Experimental</span></td>
+              <td>The pattern resolves and the verify bytes match, but behaviour has not been shown working in game.</td>
+              <td>Treat with care; call it, but do not ship a feature on it yet.</td>
+            </tr>
+            <tr>
+              <td><span class="badge ok">Verified</span></td>
+              <td>Resolved and demonstrated on this build.</td>
+              <td>Upgrading requires evidence — a log line, a spawn handle, a teleport that sticks — not just a successful scan.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="inventory">Inventory</h2>
+      <p>
+        The table below is from <code>signatures.json</code>'s recorded inventory. It does not
+        contain raw patterns or addresses — those live in the repository because they are only
+        meaningful against this one build.
+      </p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Entry</th><th scope="col">Kind</th><th scope="col">Status</th><th scope="col">Drives</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>Player::NetworkPlayerManager</code></td>
+              <td>pointer (rip)</td>
+              <td><span class="badge ok">Verified</span></td>
+              <td>The player chain; <code>GetPosition</code> / <code>SetPosition</code> / <code>GetHealth</code></td>
+            </tr>
+            <tr>
+              <td><code>SpawnSystem::Instance</code></td>
+              <td>pointer (rip, readPointer)</td>
+              <td><span class="badge wip">Experimental*</span></td>
+              <td>The <code>CSpawnSystem*</code> used by spawning</td>
+            </tr>
+            <tr>
+              <td><code>SpawnSystem::Spawn</code></td>
+              <td>function</td>
+              <td><span class="badge wip">Experimental*</span></td>
+              <td><code>prop.spawn</code>, the spawn menu</td>
+            </tr>
+            <tr>
+              <td><code>Models::PropertyGetEntry</code></td>
+              <td>function</td>
+              <td><span class="badge wip">Experimental*</span></td>
+              <td>Runtime model-name harvest</td>
+            </tr>
+            <tr>
+              <td><code>SpawnSystem::GetModelHash</code></td>
+              <td>function</td>
+              <td>Not needed</td>
+              <td>GML computes <code>hashlittle</code> itself (150/150 pairs verified)</td>
+            </tr>
+            <tr>
+              <td><code>SpawnSystem::GetModelId</code></td>
+              <td>function</td>
+              <td>Unused</td>
+              <td>This build's spawn takes a model name directly</td>
+            </tr>
+            <tr>
+              <td><code>Player::GetActor</code></td>
+              <td>function</td>
+              <td><span class="badge no">Unresolved</span> on purpose</td>
+              <td>The data chain is considered safer than the getter</td>
+            </tr>
+            <tr>
+              <td><code>Player::GetVelocity</code>, <code>SetVelocity</code>, <code>GetAimDirection</code>, <code>GetGrappleState</code>, <code>IsOnGround</code></td>
+              <td>various</td>
+              <td><span class="badge no">Unresolved</span></td>
+              <td>Future work</td>
+            </tr>
+            <tr>
+              <td><code>Vehicle::*</code></td>
+              <td>various</td>
+              <td><span class="badge no">Unresolved</span></td>
+              <td>Vehicle API stubs</td>
+            </tr>
+            <tr>
+              <td><code>Entity::Destroy</code></td>
+              <td>function</td>
+              <td><span class="badge no">Unresolved</span></td>
+              <td><code>prop.destroy</code>; leads in the RE write-up §9.6</td>
+            </tr>
+            <tr>
+              <td><code>World::*</code></td>
+              <td>various</td>
+              <td><span class="badge no">Unresolved</span></td>
+              <td>World API stubs</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="note">
+        <p>
+          <strong>*</strong> The three spawn and harvest entries are marked
+          <code>experimental</code> in the file even though their features are demonstrated —
+          the verify-then-demonstrate ladder was written after they were recorded. They work;
+          the label is the file being conservative.
+        </p>
+      </div>
+
+      <h2 id="rules">Rules for adding an entry</h2>
+      <ol>
+        <li><strong>Find it in the real binary.</strong> Use <code>tools/gml_re.py</code>
+          (cached disassembly sweep plus xrefs), <code>tools/jc3_vfind.py</code> for RTTI
+          vtable reverse lookup, or <code>tools/rtti_full.py</code> for the class map. Never type
+          an address from a forum post into code — at most into
+          <code>signatures.json</code> with a <code>source</code> that says where it came from.</li>
+        <li><strong>Derive the pattern from the function's real entry bytes.</strong> Wildcards
+          only for bytes that genuinely vary (RIP-relative operands). Prove uniqueness across the
+          whole <code>.text</code>.</li>
+        <li><strong>Record <code>verify</code> bytes</strong> — the first stable instruction
+          bytes — so a bad load is detected at load time, not suffered later.</li>
+        <li><strong>Write <code>source</code> and <code>note</code></strong> as evidence,
+          including addresses from this build.</li>
+        <li><strong>Prove it in game</strong> before flipping <code>status</code> to
+          <code>verified</code>, and keep the log line as the receipt.</li>
+      </ol>
+
+      <h2 id="tools">Research tools</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Tool</th><th scope="col">Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>tools/gml_re.py</code></td><td>Disassembly sweep, callers, writes and reads over a cached <code>.text</code></td></tr>
+            <tr><td><code>tools/rtti_full.py</code> → <code>cache/rtti.pkl</code></td><td>4,074 RTTI classes → vtables and offsets</td></tr>
+            <tr><td><code>tools/jc3_vfind.py</code></td><td>Which vtable holds a function, at which slot</td></tr>
+            <tr><td><code>tools/jc3_vt.py</code> / <code>jc3_vtable.py</code></td><td>Map runtime objects to class names; list slots</td></tr>
+            <tr><td><code>tools/jc3_pos.py</code> / <code>jc3_try.py</code></td><td>External chain resolution and candidate testing</td></tr>
+            <tr><td><code>mods/SigHunter</code></td><td>In-game probe plus a hardware write watchpoint (<code>sighunt.watch</code>)</td></tr>
+            <tr><td><code>tools/make_harvest_pattern.py</code></td><td>Pattern builder plus uniqueness proof</td></tr>
+            <tr><td><code>tools/jc3_cmd.py</code></td><td>Drive the in-game console from outside the game</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="provenance">JC3 API provenance</h2>
+      <p>
+        GML's player, vehicle, entity and world blueprint comes from
+        <strong>jc3-api</strong> (MIT, © 2016 Alexander Guettler): object layouts, the map of
+        what functions matter, and the vtable calling convention. Nothing from that project is
+        trusted as an address — its targets belong to a different build than the installed
+        <code>JustCause3.exe</code>. GML takes the model and proves every address itself against
+        this exe. The build-mismatch proof and full research write-ups live in the repository:
+      </p>
+      <ul>
+        <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/JC3_API_REFERENCE.md">JC3_API_REFERENCE.md</a> — jc3-api inventory and why its addresses cannot be used as-is.</li>
+        <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/RE_PLAYER_CHAIN.md">RE_PLAYER_CHAIN.md</a> — player chain, teleport, spawn, harvest evidence.</li>
+        <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/GETMODELHASH_RESEARCH.md">GETMODELHASH_RESEARCH.md</a> — how the model hash was solved.</li>
+        <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/MODDING_PLAN.md">MODDING_PLAN.md</a> — original recon and the recorded build fingerprint.</li>
+      </ul>
+      <p>
+        <code>jc3-console-thingy</code> (MIT, © aaronkirkham) was cross-checked for the
+        model-harvest mechanism. The source docs and exact signature patterns stay in the
+        repository; this page describes the system, not a dump of offsets.
+      </p>
+
+      <p class="doc-meta">
+        Source: <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/SIGNATURES.md">docs/SIGNATURES.md</a>.
+        Verified against build <code>0x5787641C</code>.
+      </p>
+
+      <div class="pager">
+        <a href="architecture.html">← ARCHITECTURE</a>
+        <a class="next" href="roadmap.html">ROADMAP →</a>
+      </div>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="../features.html">FEATURES</a> //
+    <a href="../index.html">HOME</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>

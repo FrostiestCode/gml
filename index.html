@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grapple Mod Loader</title>
+<style>
+:root {
+  --bg: #050608;
+  --panel: rgba(10, 13, 17, .72);
+  --line: rgba(255,255,255,.09);
+  --text: #f4f7f8;
+  --muted: #8d979e;
+  --accent: #ff6b22;
+  --accent2: #ffb347;
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
+}
+#ascii {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  width: 100%;
+  height: 100%;
+  opacity: .58;
+  pointer-events: none;
+}
+.vignette {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(circle at var(--mx,50%) var(--my,40%), rgba(255,107,34,.10), transparent 28%),
+    radial-gradient(circle at 50% 30%, transparent 0%, rgba(0,0,0,.2) 55%, rgba(0,0,0,.75) 100%);
+}
+nav {
+  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  width: min(1120px, calc(100% - 32px)); z-index: 10;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(5,6,8,.66);
+  backdrop-filter: blur(18px);
+}
+.brand { display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.04em; }
+.dot { width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px var(--accent); }
+.links { display:flex; gap:22px; }
+.links a { color:var(--muted); text-decoration:none; font-size:14px; }
+.links a:hover { color:white; }
+.hero {
+  min-height: 92vh; max-width:1120px; margin:auto; padding:180px 24px 90px;
+  display:flex; flex-direction:column; justify-content:center;
+}
+.eyebrow {
+  color:var(--accent2); font: 700 12px/1 monospace; letter-spacing:.2em;
+  text-transform:uppercase; margin-bottom:18px;
+}
+h1 { font-size:clamp(58px, 10vw, 132px); line-height:.82; letter-spacing:-.075em; margin:0; max-width:850px; }
+h1 span { color:transparent; -webkit-text-stroke:1px rgba(255,255,255,.48); }
+.hero p { max-width:650px; color:#aeb6bb; font-size:18px; line-height:1.7; margin:28px 0; }
+.buttons { display:flex; gap:12px; flex-wrap:wrap; }
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; padding:13px 18px;
+  border-radius:10px; border:1px solid var(--line); color:white; text-decoration:none;
+  background:rgba(255,255,255,.045); font-weight:700; font-size:14px;
+}
+.btn.primary { background:var(--accent); color:#130a05; border-color:var(--accent); }
+.btn:hover { transform:translateY(-2px); }
+section { max-width:1120px; margin:auto; padding:90px 24px; }
+.grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+.card {
+  padding:25px; min-height:190px; border:1px solid var(--line); border-radius:18px;
+  background:var(--panel); backdrop-filter:blur(14px);
+}
+.card .num { font:12px monospace; color:var(--accent); }
+.card h3 { margin:28px 0 10px; font-size:21px; }
+.card p { margin:0; color:var(--muted); line-height:1.65; }
+.section-title { font-size:42px; letter-spacing:-.04em; margin:0 0 35px; }
+.status {
+  display:flex; align-items:center; gap:10px; color:#aeb6bb; font:13px monospace;
+  margin-top:30px;
+}
+.status i { width:8px;height:8px;border-radius:50%;background:#61e294;box-shadow:0 0 12px #61e294; }
+footer { max-width:1120px; margin:auto; padding:40px 24px 70px; color:#687178; font:12px monospace; }
+@media(max-width:760px) {
+  .links { display:none; }
+  .grid { grid-template-columns:1fr; }
+  h1 { font-size:64px; }
+  .hero { padding-top:145px; }
+}
+</style>
+</head>
+<body>
+<canvas id="ascii"></canvas>
+<div class="vignette"></div>
+
+<nav>
+  <div class="brand"><i class="dot"></i> GRAPPLE MOD LOADER</div>
+  <div class="links">
+    <a href="#features">Features</a>
+    <a href="#mods">Mods</a>
+    <a href="#docs">Docs</a>
+    <a href="#download">Download</a>
+  </div>
+</nav>
+
+<main>
+  <div class="hero">
+    <div class="eyebrow">JUST CAUSE 3 // COMMUNITY MODDING</div>
+    <h1>BREAK THE<br><span>LIMITS.</span></h1>
+    <p>
+      A native C++ mod loader built for Just Cause 3.
+      Load mods, expose game systems, and build the tooling the community has been missing.
+    </p>
+    <div class="buttons">
+      <a class="btn primary" href="#download">DOWNLOAD GML</a>
+      <a class="btn" href="#features">EXPLORE →</a>
+    </div>
+    <div class="status"><i></i> RUNTIME ONLINE // C++ MOD API IN DEVELOPMENT</div>
+  </div>
+
+  <section id="features">
+    <h2 class="section-title">Built for adding, not replacing.</h2>
+    <div class="grid">
+      <article class="card"><div class="num">01 / RUNTIME</div><h3>Native Mod Loading</h3><p>Load C++ mods directly into the game through a lightweight native runtime.</p></article>
+      <article class="card"><div class="num">02 / API</div><h3>Game APIs</h3><p>Expose reusable systems so mods can work together instead of living as isolated hacks.</p></article>
+      <article class="card"><div class="num">03 / TOOLS</div><h3>Developer First</h3><p>Console, diagnostics, signatures and tooling designed around actual mod development.</p></article>
+    </div>
+  </section>
+
+  <section id="mods">
+    <h2 class="section-title">Your game. Your rules.</h2>
+    <div class="card">
+      <div class="num">GML / EXTENSIBLE</div>
+      <h3>From tiny tweaks to total chaos.</h3>
+      <p>
+        Grapple is designed as an extensible foundation for the Just Cause 3 modding
+        ecosystem. Add gameplay systems, world tools, scripting bridges and experimental features
+        without forcing every mod to replace the same game components.
+      </p>
+    </div>
+  </section>
+
+  <section id="docs">
+    <h2 class="section-title">Documentation</h2>
+    <div class="grid">
+      <article class="card"><div class="num">GETTING STARTED</div><h3>Install</h3><p>Drop the loader into your game directory and start building your first mod.</p></article>
+      <article class="card"><div class="num">MOD API</div><h3>C++ SDK</h3><p>Learn the runtime interfaces and build against the Grapple SDK.</p></article>
+      <article class="card"><div class="num">COMMUNITY</div><h3>Contribute</h3><p>Help reverse engineer systems, improve APIs and create new tooling.</p></article>
+    </div>
+  </section>
+
+  <section id="download">
+    <h2 class="section-title">Ready to grapple?</h2>
+    <p style="color:var(--muted);max-width:600px;line-height:1.7">
+      Replace this button with your GitHub release, Discord, or download endpoint when the first public build is ready.
+    </p>
+    <div class="buttons"><a class="btn primary" href="#">DOWNLOAD LATEST BUILD</a><a class="btn" href="#">VIEW SOURCE</a></div>
+  </section>
+</main>
+
+<footer>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</footer>
+
+<script>
+const canvas = document.getElementById('ascii');
+const ctx = canvas.getContext('2d');
+const chars = " .·:+*#%@";
+let W, H, cols, rows, font = 12;
+let mx = innerWidth/2, my = innerHeight/2, t = 0;
+
+function resize(){
+  const dpr = Math.min(devicePixelRatio || 1, 2);
+  W = innerWidth; H = innerHeight;
+  canvas.width = W*dpr; canvas.height = H*dpr;
+  canvas.style.width = W+'px'; canvas.style.height = H+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  cols = Math.ceil(W/font); rows = Math.ceil(H/font);
+}
+addEventListener('resize', resize);
+addEventListener('pointermove', e => {
+  mx = e.clientX; my = e.clientY;
+  document.documentElement.style.setProperty('--mx', mx+'px');
+  document.documentElement.style.setProperty('--my', my+'px');
+});
+resize();
+
+function draw(){
+  t += .012;
+  ctx.clearRect(0,0,W,H);
+  ctx.font = font + "px monospace";
+  ctx.textBaseline = "top";
+  for(let y=0;y<rows;y++){
+    for(let x=0;x<cols;x++){
+      const px=x*font, py=y*font;
+      const dx=px-mx, dy=py-my;
+      const dist=Math.sqrt(dx*dx+dy*dy);
+      const wave=Math.sin(x*.22+y*.14+t*3.0)*.5+.5;
+      const mouse=Math.max(0,1-dist/260);
+      const v=Math.max(0, Math.min(1, wave*.22+mouse*.78));
+      const c=chars[Math.floor(v*(chars.length-1))];
+      if(c!==" "){
+        const alpha=.10+mouse*.42+wave*.08;
+        ctx.fillStyle=`rgba(255,${100+Math.floor(mouse*80)},${35+Math.floor(mouse*35)},${alpha})`;
+        ctx.fillText(c,px,py);
+      }
+    }
+  }
+  requestAnimationFrame(draw);
+}
+draw();
+</script>
+</body>
+</html>

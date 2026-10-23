@@ -134,6 +134,7 @@ h1 span { color: transparent; -webkit-text-stroke: 1px rgba(255,255,255,.48); }
 .btn.primary { background: var(--accent); color: #130a05; border-color: var(--accent); }
 .btn:hover { transform: translateY(-2px); background: rgba(255,255,255,.09); }
 .btn.primary:hover { background: #ff7d3a; }
+[aria-disabled] { pointer-events: none; opacity: .55; }
 section.block { max-width: var(--max); margin: auto; padding: 90px 24px; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
 .grid.two { grid-template-columns: repeat(2, 1fr); }

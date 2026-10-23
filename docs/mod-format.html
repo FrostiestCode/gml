@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mod format — Grapple Mod Loader</title>
+<meta name="description" content="How a Grapple Mod Loader mod is described and loaded: mod.json, the GML_ModInit entry point, C ABI rules, events, console commands and hot reload.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Mod format — Grapple Mod Loader">
+<meta property="og:description" content="Manifest, entry points, ABI rules, events and the hot-reload lifecycle.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="../index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="../features.html">Features</a>
+    <a href="index.html" aria-current="page">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="../index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="docs-shell">
+  <aside class="docs-sidebar">
+    <p class="docs-label">DOCUMENTATION</p>
+    <nav class="docs-nav" aria-label="Documentation">
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a href="mod-format.html" aria-current="page">Mod format</a>
+      <a href="api.html">C++ API</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="research.html">Signatures &amp; research</a>
+      <a href="roadmap.html">Roadmap</a>
+    </nav>
+    <a class="docs-source" href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/docs">SOURCE DOCS ↗</a>
+  </aside>
+
+  <article class="docs-content">
+    <p class="crumbs"><a href="index.html">Docs</a> / Mod format</p>
+    <p class="eyebrow">DOCS // MODDING</p>
+    <h1>Mod format</h1>
+    <p class="lead">
+      A GML mod is a 64-bit DLL described by a <code>mod.json</code> and loaded through a pure C
+      ABI. Four working mods in the repository are the reference implementation for everything
+      on this page.
+    </p>
+
+    <div class="prose">
+      <h2 id="manifest">mod.json</h2>
+      <pre><code>{
+  "id": "com.grapple.example",
+  "name": "Grapple Example Mod",
+  "version": "1.0.0",
+  "priority": 0,
+  "entry": "ExampleMod.dll",
+  "requires": [
+    { "id": "com.grapple.other", "version": "1.0.0" }
+  ]
+}</code></pre>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Field</th><th scope="col">Required</th><th scope="col">Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>id</code></td><td>Yes</td><td>Unique, stable, reverse-DNS-ish identifier. Use the same string as the owner for subscriptions, hooks and commands.</td></tr>
+            <tr><td><code>name</code></td><td>Yes</td><td>Human-readable name shown by <code>gml.mods</code>.</td></tr>
+            <tr><td><code>version</code></td><td>Yes</td><td>Mod version. Compared against <code>requires</code> entries and passed to <code>GML_ModInit</code>.</td></tr>
+            <tr><td><code>priority</code></td><td>No</td><td>Load order; lower loads first. Defaults to <code>0</code>. Unload happens in reverse.</td></tr>
+            <tr><td><code>entry</code></td><td>Yes</td><td>The DLL inside the mod folder. Keep it next to <code>mod.json</code>.</td></tr>
+            <tr><td><code>requires</code></td><td>No</td><td>Optional dependency list. An unresolved dependency is a load failure, not a warning.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="entry">The entry point</h2>
+      <p>Export exactly two C functions; the shutdown export is optional:</p>
+      <pre><code>#include &lt;gml/GML_Mod.h&gt;
+
+static int OnInit(const GML_ModContext* ctx)
+{
+    // ctx-&gt;api          never null when GML called you
+    // ctx-&gt;modId        your id; use it as the owner for everything
+    // ctx-&gt;modDirectory absolute path to this mod's folder
+    return GML_OK;        // anything else = load failure, DLL is unloaded
+}
+
+static void OnShutdown()
+{
+    // Stop threads first. GML removes forgotten hooks, subscriptions
+    // and commands by owner, but cannot save a live thread in a freed DLL.
+}
+
+GML_MOD_ENTRY2(OnInit, OnShutdown)</code></pre>
+      <p>
+        <code>GML_MOD_ENTRY2</code> emits both exports and stores the API pointer for the C++
+        helpers in <code>gml::</code>. If you need the raw exports instead, the signatures are
+        <code>int GML_ModInit(const GML_ModContext*)</code> and
+        <code>void GML_ModShutdown(void)</code>.
+      </p>
+
+      <h2 id="abi">ABI rules</h2>
+      <ol>
+        <li><strong>C, not C++.</strong> No STL, classes or exceptions across the boundary. Every struct starts with a <code>uint32_t size</code>; GML never reads past the size you compiled against, and you must do the same for structs you receive.</li>
+        <li><strong>Versioned pointers.</strong> <code>GML_Api</code> holds sub-struct pointers (<code>core</code>, <code>console</code>, <code>event</code>, <code>memory</code>, <code>player</code>, <code>prop</code>, …). Null-check anything you did not verify at compile time. New sub-APIs are appended; old loaders leave them <code>NULL</code>.</li>
+        <li><strong>Whoever allocated, frees.</strong> GML frees nothing a mod allocated, and vice versa. Use <code>core-&gt;Alloc</code> / <code>Free</code> for anything that crosses the module boundary.</li>
+        <li><strong>Owner = your mod id.</strong> Subscribe, hook and register commands with <code>ctx-&gt;modId</code>. GML removes everything owned by that id on unload. A literal owner string leaks the listener across reloads and faults every tick afterwards.</li>
+        <li><strong>No blocking in <code>GML_ModInit</code>.</strong> It runs on the loader's thread during boot. Spawn a worker for long work and join it in shutdown.</li>
+        <li><strong>SEH is not yours to use.</strong> GML wraps every call into mod code with its own handler. Do not add <code>__try</code> to mod code; it changes how your frames unwind.</li>
+        <li><strong>Static CRT.</strong> Mods link <code>/MT</code> (or <code>/MTd</code>). Each mod owns its heap privately, which is what makes rule 3 simple.</li>
+      </ol>
+
+      <h2 id="events">Events</h2>
+      <pre><code>uint64_t sub = api-&gt;event-&gt;Subscribe(
+    api-&gt;events-&gt;Tick, OnTick, nullptr, 0, ctx-&gt;modId);
+
+api-&gt;event-&gt;Unsubscribe(sub);   // in shutdown; GML also cleans up by owner</code></pre>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Event</th><th scope="col">Payload / notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>gml.tick</code></td><td><code>GML_TickEvent</code>: delta seconds, uptime, frame. GML's own timer — no game hook needed.</td></tr>
+            <tr><td><code>gml.present</code></td><td><code>GML_PresentEvent</code>: swapchain, device, context. <strong>Render thread</strong> — never block or resize windows here.</td></tr>
+            <tr><td><code>gml.mod.loaded</code></td><td><code>GML_ModEvent</code>: id, name, version.</td></tr>
+            <tr><td><code>gml.mod.unloading</code></td><td><code>GML_ModEvent</code>: last chance to clean up.</td></tr>
+            <tr><td><code>gml.config.reloaded</code></td><td><code>GML_ConfigEvent</code>: source of the reload.</td></tr>
+            <tr><td><code>gml.console.command</code></td><td><code>GML_ConsoleEvent</code>: raw typed line.</td></tr>
+            <tr><td><code>gml.console.toggled</code></td><td><code>GML_ConsoleToggleEvent</code>: visible flag.</td></tr>
+            <tr><td><code>gml.game.ready</code></td><td><code>GML_GameReadyEvent</code>: signatures resolved and the game loop hook, if any, is installed.</td></tr>
+            <tr><td><code>gml.game.shutdown</code></td><td>Game shutdown notification.</td></tr>
+            <tr><td><code>gml.player.spawn</code></td><td>Needs research to fire reliably.</td></tr>
+            <tr><td><code>gml.entity.destroyed</code></td><td>Needs research.</td></tr>
+            <tr><td><code>gml.world.streamin</code></td><td>Needs research.</td></tr>
+            <tr><td><code>gml.lua.reloaded</code></td><td>Reserved for GrappleLua.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Subscriptions take a priority; lower runs first. Dispatch copies the listener list and
+        calls handlers outside the mutex, so a handler may emit another event. The
+        <a href="architecture.html#dispatchgate">DispatchGate</a> is what makes unloading safe
+        while the render thread is inside a listener.
+      </p>
+
+      <h2 id="commands">Console commands</h2>
+      <pre><code>api-&gt;console-&gt;RegisterCommand(
+    "mymod.do", "One line of help", "mymod.do &lt;arg&gt;",
+    &amp;OnCommand, ctx-&gt;modId);
+
+api-&gt;console-&gt;UnregisterCommand("mymod.do");   // in shutdown</code></pre>
+      <p>
+        Output goes through <code>GML_CommandOutputFn</code>, so it lands in the overlay
+        scrollback, the external console and the file log at once. Parse arguments defensively —
+        the console is typed by humans.
+      </p>
+
+      <h2 id="game-api">Game APIs</h2>
+      <p>
+        Everything gameplay-facing lives behind versioned sub-structs and degrades to
+        <code>GML_ERR_NOT_RESOLVED</code> when its signature is not live:
+      </p>
+      <pre><code>GML_Vec3 pos{};
+if (api-&gt;player-&gt;GetPosition(&amp;pos) != GML_OK) {
+    // say so; do not guess an address
+}
+
+api-&gt;player-&gt;SetPosition(&amp;pos);   // verified: moves Rico and it sticks
+
+void* handle = api-&gt;prop-&gt;Spawn(
+    "v0008_car_autostraad_modernsportssaloon_civilian_01", &amp;pos);
+// Spawn is async; prop.status lists handles.</code></pre>
+      <p>
+        The callable surface and the verified / unresolved split are on the
+        <a href="api.html">C++ API page</a>.
+      </p>
+
+      <h2 id="hot-reload">Hot reload</h2>
+      <p><code>gml.mod reload</code> (or enable/disable followed by reload) performs three steps:</p>
+      <ol>
+        <li>The tick thread is quiesced. The <strong>DispatchGate</strong> blocks new dispatch until every in-flight Present and console callback has returned.</li>
+        <li>Mods unload in reverse priority order: <code>GML_ModShutdown</code> under SEH, then hooks, subscriptions and commands by owner, then <code>FreeLibrary</code>.</li>
+        <li>The mods folder is re-discovered and loaded again; <code>gml.mods</code> shows the result.</li>
+      </ol>
+      <div class="note">
+        <p>
+          <strong>Replacing a loaded DLL.</strong> Windows will not let you overwrite it. Rename
+          the old file to <code>*.old.dll</code>, copy the new build in, run
+          <code>gml.mod reload</code>, then delete the old file. Also note that
+          <code>gml.mod disable</code> currently marks a mod but a reload still loads enabled
+          folders; the rename route is the reliable one while iterating.
+        </p>
+      </div>
+
+      <h2 id="samples">Sample mods</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Mod</th><th scope="col">Read it for</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>ExampleMod</code></td><td>The full ABI tour: logging, config, commands, events, memory, pattern work, archive inspection, crash dumps and an IAT hook.</td></tr>
+            <tr><td><code>PlayerTeleportMod</code></td><td>A real feature with persistent data, a load-order dependency and <code>tp.set</code> through the verified interaction-context matrix.</td></tr>
+            <tr><td><code>BorderlessMod</code></td><td>A worker thread created in init and joined in shutdown, plus exact window-style save/restore.</td></tr>
+            <tr><td><code>SigHunter</code></td><td>The research instrument: RTTI probes, <code>sighunt.probe</code>, and a hardware write watchpoint for tracking transforms.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="build">Build and deploy a mod</h2>
+      <p>
+        Add a plain <code>.vcxproj</code> to <code>GrappleModLoader.sln</code>, link
+        <code>/MT</code>, and have the post-build step stage <code>mod.json</code> next to the
+        DLL. <code>tools\Deploy.ps1</code> mirrors every folder under
+        <code>dist\&lt;cfg&gt;\mods\*</code> into the game, so a new mod in the same shape
+        deploys for free.
+      </p>
+      <div class="diagram">&lt;game&gt;\GrappleModLoader\
+  config.json, signatures.json, logs\
+  mods\&lt;ModName&gt;\
+    mod.json
+    &lt;ModName&gt;.dll
+    (+ anything else the mod wants)</div>
+
+      <p class="doc-meta">
+        Source: <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/MOD_FORMAT.md">docs/MOD_FORMAT.md</a>,
+        the SDK headers in <a href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/src/GML.SDK/include/gml">src/GML.SDK/include/gml</a>,
+        and the <a href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/mods">sample mods</a>.
+      </p>
+
+      <div class="pager">
+        <a href="getting-started.html">← GETTING STARTED</a>
+        <a class="next" href="api.html">C++ API →</a>
+      </div>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="../features.html">FEATURES</a> //
+    <a href="../index.html">HOME</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>

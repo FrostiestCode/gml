@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started — Grapple Mod Loader</title>
+<meta name="description" content="Build Grapple Mod Loader, deploy it into Just Cause 3, verify signatures, install a mod, and troubleshoot an unresolved game build.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Getting started — Grapple Mod Loader">
+<meta property="og:description" content="From a clean checkout to the in-game console and spawn menu.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="../index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="../features.html">Features</a>
+    <a href="index.html" aria-current="page">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="../index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="docs-shell">
+  <aside class="docs-sidebar">
+    <p class="docs-label">DOCUMENTATION</p>
+    <nav class="docs-nav" aria-label="Documentation">
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html" aria-current="page">Getting started</a>
+      <a href="mod-format.html">Mod format</a>
+      <a href="api.html">C++ API</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="research.html">Signatures &amp; research</a>
+      <a href="roadmap.html">Roadmap</a>
+    </nav>
+    <a class="docs-source" href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/docs">SOURCE DOCS ↗</a>
+  </aside>
+
+  <article class="docs-content">
+    <p class="crumbs"><a href="index.html">Docs</a> / Getting started</p>
+    <p class="eyebrow">DOCS // INSTALL</p>
+    <h1>Getting started</h1>
+    <p class="lead">
+      Build the solution, deploy the proxy into Just Cause 3, and confirm that the signature
+      database resolved your exe. If it did, the console and spawn menu work; if it did not,
+      GML will tell you instead of crashing.
+    </p>
+
+    <div class="prose">
+      <h2 id="requirements">What you need</h2>
+      <ul>
+        <li><strong>Windows 10 or 11, x64.</strong> The loader and every mod are 64-bit.</li>
+        <li><strong>Just Cause 3 on Steam</strong> (app <code>225540</code>). GML has been verified against the retail exe with <code>SizeOfImage 0x3241000</code> and <code>TimeDateStamp 0x5787641C</code>.</li>
+        <li><strong>Visual Studio 2026</strong> with <em>Desktop development with C++</em> and the <code>v145</code> platform toolset, as used by this repository. Another toolset can work if you retarget the projects.</li>
+        <li><strong>PowerShell 5.1+</strong> for the deploy script.</li>
+        <li>The game must be <strong>closed</strong> while you deploy; Windows locks loaded DLLs.</li>
+      </ul>
+      <div class="note warn">
+        <p>
+          <strong>One build, on purpose.</strong> Signatures are keyed to the exe fingerprint. On a
+          different build they stay unresolved and dependent features return
+          <code>GML_ERR_NOT_RESOLVED</code>. There is no supported "just try the old addresses"
+          mode, because that is how mods crash other people's games.
+        </p>
+      </div>
+
+      <h2 id="build">1. Build</h2>
+      <p>From the repository root, build the solution in Release / x64:</p>
+      <pre><code>&amp; "C:\Program Files\Microsoft Visual Studio\18\Community\MSBuild\Current\Bin\MSBuild.exe" `
+    GrappleModLoader.sln /p:Configuration=Release /p:Platform=x64 `
+    /m /v:minimal /nologo</code></pre>
+      <p>
+        If <code>msbuild</code> is already on your <code>PATH</code>, the short form works too:
+      </p>
+      <pre><code>msbuild GrappleModLoader.sln /p:Configuration=Release /p:Platform=x64 /m</code></pre>
+      <p>
+        The build writes the proxy, the core DLL and the sample mods under
+        <code>dist\Release\</code>. If that folder is missing when you deploy, the build did not
+        finish.
+      </p>
+
+      <h2 id="deploy">2. Deploy</h2>
+      <p>
+        The deploy script locates your Steam library, backs up anything it is about to overwrite,
+        and mirrors the build into the game folder:
+      </p>
+      <pre><code>.\tools\Deploy.ps1 -Configuration Release</code></pre>
+      <p>If it cannot find the game, point it at the folder that contains <code>JustCause3.exe</code>:</p>
+      <pre><code>.\tools\Deploy.ps1 -GamePath "D:\Games\SteamLibrary\steamapps\common\Just Cause 3"</code></pre>
+      <p>What ends up in the game folder:</p>
+      <div class="diagram">Just Cause 3\
+├─ dinput8.dll                  GML.Loader — the proxy the game imports
+├─ GrappleModLoader.dll         GML.Core — the framework
+└─ GrappleModLoader\
+   ├─ config.json               created on first run
+   ├─ signatures.json           created on first run
+   ├─ logs\
+   │  └─ crashes\
+   └─ mods\
+      ├─ ExampleMod\
+      ├─ PlayerTeleportMod\
+      ├─ BorderlessMod\
+      └─ SigHunter\</div>
+      <p>
+        <code>dinput8.dll</code> is the only file the game loads directly. It forwards
+        <code>DirectInput8Create</code> to the real system DLL, then loads
+        <code>GrappleModLoader.dll</code>. Keep the loader boring — it is the one component that
+        cannot fail loudly.
+      </p>
+
+      <h2 id="launch">3. Launch and verify</h2>
+      <div class="steps">
+        <div class="step">
+          <h3>Start Just Cause 3 normally through Steam</h3>
+          <p>No special launcher or command line is required.</p>
+        </div>
+        <div class="step">
+          <h3>Press <span class="kbd">`</span> to open the console</h3>
+          <p>A transparent overlay should appear with a scrollback area and an input line. An external Win32 console opens too unless you disabled it.</p>
+        </div>
+        <div class="step">
+          <h3>Check the build</h3>
+          <p>Run <code>gml.game</code> to see the exe fingerprint. <code>gml.diag</code> prints modules, hooks and subscriptions; <code>gml.sig</code> reports the signature inventory.</p>
+        </div>
+        <div class="step">
+          <h3>Try the verified features</h3>
+          <p><code>gml.player</code> reports the player chain, <code>tp.set x y z</code> moves Rico, and <span class="kbd">Numpad 0</span> opens the spawn menu.</p>
+        </div>
+        <div class="step">
+          <h3>Toggle borderless</h3>
+          <p><span class="kbd">F11</span> switches the window mode and restores the exact previous style on the way back.</p>
+        </div>
+      </div>
+
+      <h2 id="install-a-mod">Install a mod</h2>
+      <p>
+        A mod is a folder under <code>GrappleModLoader\mods\</code> containing a
+        <code>mod.json</code> and the DLL it names:
+      </p>
+      <div class="diagram">&lt;game&gt;\GrappleModLoader\mods\MyMod\
+  ├─ mod.json
+  └─ MyMod.dll</div>
+      <p>Then reload from the console:</p>
+      <pre><code>gml.mods
+gml.mod reload</code></pre>
+      <p>
+        During development you cannot overwrite a DLL the game has loaded. Rename the loaded file
+        to <code>*.old.dll</code>, copy the new build in, run <code>gml.mod reload</code>, then
+        delete the old file. Full details and the lifetime rules are in
+        <a href="mod-format.html">Mod format</a>.
+      </p>
+
+      <h2 id="controls">Controls and config</h2>
+      <p>
+        The short version: <span class="kbd">`</span> console, <span class="kbd">Numpad 0</span>
+        spawn menu, <span class="kbd">F11</span> borderless. While a panel is open the game
+        receives no gameplay input — DirectInput reads are neutralised and the cursor is frozen.
+      </p>
+      <p>
+        <code>GrappleModLoader\config.json</code> is created on first run. It covers log level,
+        the external console, crash handling, console opacity, spawn-menu keys and the borderless
+        hotkey. The full table is on the <a href="../features.html#config">features page</a>.
+        Inspect the loaded values with <code>gml.config</code>.
+      </p>
+
+      <h2 id="troubleshooting">Troubleshooting</h2>
+      <h3>Nothing happens on launch</h3>
+      <ul>
+        <li>Confirm both <code>dinput8.dll</code> and <code>GrappleModLoader.dll</code> are next to <code>JustCause3.exe</code>, not inside <code>GrappleModLoader\</code>.</li>
+        <li>Check that the deploy script did not report a missing build output.</li>
+        <li>Read <code>GrappleModLoader\logs\grapplemodloader.log</code>. The loader logs its boot order and the first failure.</li>
+      </ul>
+
+      <h3>Features return <code>GML_ERR_NOT_RESOLVED</code></h3>
+      <ul>
+        <li>Your exe is probably a different build. <code>gml.game</code> shows the fingerprint GML sees.</li>
+        <li>The log names the signature entry that failed to resolve. That is the honest result, not a bug.</li>
+        <li>Do not paste addresses from another build into <code>signatures.json</code>. Each entry needs a pattern and a runtime proof on your exe — see <a href="research.html">Signatures &amp; research</a>.</li>
+      </ul>
+
+      <h3>The console opens but the game still moves</h3>
+      <ul>
+        <li>Make sure the panel is actually open; the input gate follows the panel state.</li>
+        <li>If you rebound <code>console.toggleKey</code>, the old key no longer toggles it.</li>
+        <li>Report it with <code>gml.diag</code> output and the log; that is the evidence needed to fix a gate.</li>
+      </ul>
+
+      <h3>The game crashed</h3>
+      <ul>
+        <li>Look in <code>GrappleModLoader\logs\crashes\</code> for a minidump and report.</li>
+        <li>Set <code>loader.logLevel</code> to <code>debug</code> or <code>trace</code> before reproducing.</li>
+        <li><code>gml.crash</code> and the debug API can write a dump on demand; useful before a long session.</li>
+      </ul>
+
+      <h2 id="uninstall">Uninstall</h2>
+      <pre><code>.\tools\Deploy.ps1 -Uninstall</code></pre>
+      <p>
+        This restores the backups and removes GML. Your <code>mods</code> folder and
+        <code>config.json</code> are kept. Add <code>-PurgeData</code> to delete
+        <code>GrappleModLoader\</code> entirely (it asks first; <code>-Force</code> skips the
+        prompt).
+      </p>
+
+      <div class="note ok">
+        <p>
+          Next: <a href="mod-format.html">Mod format</a> for the manifest and ABI, or
+          <a href="api.html">C++ API</a> for the callable surface.
+        </p>
+      </div>
+
+      <p class="doc-meta">
+        Source: <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/README.md">README.md</a>
+        and <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/tools/Deploy.ps1">tools/Deploy.ps1</a>.
+        Verified against build <code>0x5787641C</code>.
+      </p>
+
+      <div class="pager">
+        <a href="index.html">← DOCS OVERVIEW</a>
+        <a class="next" href="mod-format.html">MOD FORMAT →</a>
+      </div>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="../features.html">FEATURES</a> //
+    <a href="../index.html">HOME</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>

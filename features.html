@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Features — Grapple Mod Loader for Just Cause 3</title>
+<meta name="description" content="What works in Grapple Mod Loader today: native mod loading, a working teleport, prop spawning, a 795-name spawn menu, in-game console, input gating, hot reload and F11 borderless — plus what is still unresolved.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Features — Grapple Mod Loader">
+<meta property="og:description" content="Verified features, controls, spawn catalog, console commands and configuration for Grapple Mod Loader.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="features.html" aria-current="page">Features</a>
+    <a href="docs/index.html">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="page-shell">
+  <header>
+    <p class="eyebrow">FEATURES // VERIFIED IN GAME</p>
+    <h1>What works today.</h1>
+    <p class="lead">
+      Everything on this page was demonstrated on the recorded Just Cause 3 build unless it is
+      marked otherwise. Unresolved features say so — GML never guesses an address to make a
+      feature look finished.
+    </p>
+  </header>
+
+  <article class="prose">
+    <div class="note warn">
+      <p>
+        <strong>Build key.</strong> Verified against <code>SizeOfImage 0x3241000</code> and
+        <code>TimeDateStamp 0x5787641C</code>. On any other exe, keyed signatures refuse to
+        resolve and dependent calls return <code>GML_ERR_NOT_RESOLVED</code> instead of running
+        against the wrong bytes.
+      </p>
+    </div>
+
+    <h2 id="verified">Verified feature set</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Feature</th><th scope="col">State</th><th scope="col">What it does</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Local player chain</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td><code>CNetworkPlayerManager</code> → <code>CCharacter</code>. Position and health are reachable through the public API.</td>
+          </tr>
+          <tr>
+            <td>Teleport that sticks</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td><code>tp.set x y z</code> writes through <code>CInteractionContext+0x330</code>; the engine re-derives its own transform, so Rico stays put.</td>
+          </tr>
+          <tr>
+            <td>Prop spawn</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td><code>CSpawnSystem::Spawn</code> is asynchronous; GML records the handle and <code>prop.status</code> reports it.</td>
+          </tr>
+          <tr>
+            <td>Spawn menu</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td>Numpad 0 opens a GMod-style browser for vehicles, weapons, characters, animals and props.</td>
+          </tr>
+          <tr>
+            <td>Runtime model harvesting</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td>Names are harvested from the game's own streaming while you play; the catalog grows instead of staying frozen.</td>
+          </tr>
+          <tr>
+            <td>Console and overlay</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td>Transparent in-game console with scrollback, plus an optional external Win32 console for a second screen.</td>
+          </tr>
+          <tr>
+            <td>Input gating</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td>While a panel is open, DirectInput reads are neutralised and <code>GetCursorPos</code> is frozen. Typing never moves Rico.</td>
+          </tr>
+          <tr>
+            <td>Mod hot-reload</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td><code>gml.mod reload</code> tears down a mod's hooks, events and commands through the DispatchGate before loading the new DLL.</td>
+          </tr>
+          <tr>
+            <td>Borderless window</td>
+            <td><span class="badge ok">Verified</span></td>
+            <td>F11 saves the exact window style, switches to borderless, and restores the original style on toggle back.</td>
+          </tr>
+          <tr>
+            <td>Per-object destroy</td>
+            <td><span class="badge no">Unresolved</span></td>
+            <td><code>Entity::Destroy</code> is not mapped yet. <code>prop.destroy</code> exists but needs research.</td>
+          </tr>
+          <tr>
+            <td>Vehicle teleport</td>
+            <td><span class="badge no">Unresolved</span></td>
+            <td>The interaction-context chain used for <code>tp.set</code> is absent while driving. No value is invented in its place.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="controls">Controls</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Input</th><th scope="col">Action</th><th scope="col">Notes</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="kbd">`</span></td><td>Open the in-game console</td><td>Tilde / backtick. <code>help</code> lists every registered command.</td></tr>
+          <tr><td><span class="kbd">Numpad 0</span></td><td>Open the spawn menu</td><td>Rebuilt from the current catalog every time it opens.</td></tr>
+          <tr><td><span class="kbd">8</span> / <span class="kbd">2</span></td><td>Move the spawn menu selection</td><td>Up / down through the list.</td></tr>
+          <tr><td><span class="kbd">4</span> / <span class="kbd">6</span></td><td>Change category</td><td>Vehicles, weapons, misc.</td></tr>
+          <tr><td><span class="kbd">9</span> / <span class="kbd">3</span></td><td>Page the list</td><td>For catalogs larger than one screen.</td></tr>
+          <tr><td><span class="kbd">5</span> / <span class="kbd">Enter</span></td><td>Spawn selected entry</td><td>Spawns above the player using <code>spawnmenu.spawnOffsetZ</code>.</td></tr>
+          <tr><td><span class="kbd">F11</span></td><td>Toggle borderless</td><td>Handled by BorderlessMod; hotkey is configurable.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Closing a panel returns input to the game. The gate covers both keyboard and mouse, so
+      console typing and menu navigation do not leak into gameplay.
+    </p>
+
+    <h2 id="spawn-menu">Inside the spawn menu</h2>
+    <p>
+      A fresh session lists <strong>795 names</strong>: <strong>195 vehicles</strong>,
+      <strong>84 weapons</strong>, and <strong>516 misc</strong> entities (characters, animals,
+      props, wrecks and DLC). Every entry carries its source in the menu footer:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Source</th><th scope="col">Where it comes from</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="badge ok">verified</span></td><td>126 vehicle and 24 weapon names whose Avalanche <code>hashlittle</code> hash GML reproduces exactly, from re-verified jc3-api tables.</td></tr>
+          <tr><td><span class="badge wip">runtime</span></td><td>Names harvested live from the game's streaming: characters, animals, props, wrecks and DLC entities. The list grows while you play.</td></tr>
+          <tr><td><span class="badge wip">dropzone</span></td><td>File stems of loose <code>.ee</code> entity mods in <code>&lt;game&gt;\dropzone\</code>.</td></tr>
+          <tr><td><span class="badge wip">user</span></td><td>One name per line from <code>GrappleModLoader\spawnmenu\*.txt</code>. A starter <code>models.txt</code> is created for you.</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p>
+      Categories are inferred from the name: <code>v&lt;digits&gt;_</code> becomes Vehicles,
+      <code>w&lt;digits&gt;_</code> becomes Weapons (including the <code>dlc*_</code> prefix).
+      Other harvested names go to Misc; anything unclassifiable lands in Unknown.
+      <code>gml.spawnmenu dump</code> writes the whole catalog to <code>catalog_dump.txt</code>.
+    </p>
+
+    <h2 id="console">Console commands</h2>
+    <p>
+      Open the console with <span class="kbd">`</span>. Commands are registered by the core and
+      by mods, so the list is always the truth for your install. The core set:
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Group</th><th scope="col">Commands</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Runtime</td>
+            <td><code>help</code>, <code>gml.version</code>, <code>gml.game</code>, <code>gml.diag</code>, <code>gml.config</code>, <code>gml.log</code>, <code>gml.modules</code>, <code>gml.exec</code></td>
+          </tr>
+          <tr>
+            <td>Mods</td>
+            <td><code>gml.mods</code>, <code>gml.mod &lt;enable|disable|reload&gt;</code>, <code>gml.hooks</code>, <code>gml.events</code>, <code>gml.overlay</code>, <code>gml.crash</code></td>
+          </tr>
+          <tr>
+            <td>Research</td>
+            <td><code>gml.player</code>, <code>gml.poschain</code>, <code>gml.sig</code>, <code>gml.scan</code>, <code>gml.mem</code>, <code>gml.content</code></td>
+          </tr>
+          <tr>
+            <td>Props</td>
+            <td><code>prop.spawn &lt;model&gt; [x y z]</code>, <code>prop.status [handle]</code>, <code>prop.destroy &lt;handle&gt;</code> (research)</td>
+          </tr>
+          <tr>
+            <td>Spawn menu</td>
+            <td><code>gml.spawnmenu [open|close|rebuild|dump]</code></td>
+          </tr>
+          <tr>
+            <td>Sample mods</td>
+            <td><code>tp.*</code> (PlayerTeleportMod), <code>borderless.*</code> (BorderlessMod), <code>example.*</code> (ExampleMod), <code>sighunt.*</code> (SigHunter)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="config">Configuration</h2>
+    <p>
+      <code>GrappleModLoader/config.json</code> is created on first run. Unknown keys are kept;
+      edit while the game is closed, or use <code>gml.config</code> to inspect what the loader
+      actually loaded.
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th scope="col">Key</th><th scope="col">Default</th><th scope="col">Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>loader.logLevel</code></td><td><code>info</code></td><td><code>trace</code> / <code>debug</code> / <code>info</code> / <code>warn</code> / <code>error</code>.</td></tr>
+          <tr><td><code>loader.externalConsole</code></td><td><code>true</code></td><td>Also allocate a Win32 console beside the overlay.</td></tr>
+          <tr><td><code>loader.crashHandler</code></td><td><code>true</code></td><td>Write a minidump and report on crash.</td></tr>
+          <tr><td><code>console.toggleKey</code></td><td><code>0xC0</code></td><td>Virtual-key code for the console key.</td></tr>
+          <tr><td><code>console.opacity</code></td><td><code>0.62</code></td><td>Overlay background opacity.</td></tr>
+          <tr><td><code>console.dimGame</code></td><td><code>0.35</code></td><td>How much the game is dimmed behind the console.</td></tr>
+          <tr><td><code>spawnmenu.enabled</code></td><td><code>true</code></td><td>Enable the spawn menu.</td></tr>
+          <tr><td><code>spawnmenu.key</code></td><td><code>0x60</code></td><td>Numpad 0 by default.</td></tr>
+          <tr><td><code>spawnmenu.spawnOffsetZ</code></td><td><code>4.0</code></td><td>Metres above the player that props appear.</td></tr>
+          <tr><td><code>borderless.key</code></td><td><code>0x7A</code></td><td>F11 by default.</td></tr>
+          <tr><td><code>borderless.monitor</code></td><td><code>-1</code></td><td>Target monitor; <code>-1</code> uses the game's current monitor.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h2 id="rules">Engineering rules</h2>
+    <ol>
+      <li>No address is trusted without a signature that matches <em>this</em> exe build and byte-verifies at load.</li>
+      <li>Unresolved features return <code>GML_ERR_NOT_RESOLVED</code> and say so. They never guess.</li>
+      <li>Every game call is SEH-contained in exactly one place.</li>
+      <li>Offsets transcribed from third-party layouts are hypotheses until a runtime check agrees.</li>
+      <li>No fabricated content: model names come from verified tables, game memory, your dropzone, or your own lists.</li>
+    </ol>
+
+    <div class="note ok">
+      <p>
+        Ready to build? Start with <a href="docs/getting-started.html">Getting started</a>, then
+        read the <a href="docs/mod-format.html">mod format</a> and the
+        <a href="docs/api.html">C++ API</a>.
+      </p>
+    </div>
+
+    <p class="doc-meta">
+      Sources: <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/README.md">README.md</a>,
+      <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/ROADMAP.md">ROADMAP.md</a>,
+      <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/SIGNATURES.md">SIGNATURES.md</a>.
+      Verified against build <code>0x5787641C</code>.
+    </p>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="index.html">HOME</a> //
+    <a href="docs/index.html">DOCS</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>

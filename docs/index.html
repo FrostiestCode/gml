@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation — Grapple Mod Loader</title>
+<meta name="description" content="Grapple Mod Loader documentation: install and build, the native mod format, the C++ API, internal architecture, signature research and the roadmap.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Documentation — Grapple Mod Loader">
+<meta property="og:description" content="Install, build mods, use the C++ API, and understand the signature system behind Grapple Mod Loader.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="../index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="../features.html">Features</a>
+    <a href="index.html" aria-current="page">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="../index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="docs-shell">
+  <aside class="docs-sidebar">
+    <p class="docs-label">DOCUMENTATION</p>
+    <nav class="docs-nav" aria-label="Documentation">
+      <a href="index.html" aria-current="page">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a href="mod-format.html">Mod format</a>
+      <a href="api.html">C++ API</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="research.html">Signatures &amp; research</a>
+      <a href="roadmap.html">Roadmap</a>
+    </nav>
+    <a class="docs-source" href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/docs">SOURCE DOCS ↗</a>
+  </aside>
+
+  <article class="docs-content">
+    <p class="crumbs"><a href="../index.html">Home</a> / Documentation</p>
+    <p class="eyebrow">DOCS // GML</p>
+    <h1>Read the loader.</h1>
+    <p class="lead">
+      GML is a native C++ framework, not a scripting layer. These pages cover how to install it,
+      how a mod is shaped, the public C ABI, and the signature system that keeps game addresses
+      honest.
+    </p>
+
+    <div class="note">
+      <p>
+        <strong>Start here if you just want it running.</strong> The
+        <a href="getting-started.html">getting started guide</a> takes you from a clean checkout to
+        a working console and spawn menu, and tells you what to check when a signature does not
+        resolve.
+      </p>
+    </div>
+
+    <div class="grid two" style="margin-top:28px">
+      <a class="card" href="getting-started.html">
+        <div class="num">01 / INSTALL</div>
+        <h3>Getting started</h3>
+        <p>Requirements, build command, deploy script, first launch, controls, config and troubleshooting.</p>
+        <span class="more">OPEN GUIDE →</span>
+      </a>
+      <a class="card" href="mod-format.html">
+        <div class="num">02 / MODDING</div>
+        <h3>Mod format</h3>
+        <p><code>mod.json</code>, the two DLL exports, ABI rules, events, console commands and hot reload.</p>
+        <span class="more">WRITE A MOD →</span>
+      </a>
+      <a class="card" href="api.html">
+        <div class="num">03 / REFERENCE</div>
+        <h3>C++ API</h3>
+        <p>Versioned sub-APIs, result codes, types, and what is callable on the recorded build today.</p>
+        <span class="more">BROWSE THE ABI →</span>
+      </a>
+      <a class="card" href="architecture.html">
+        <div class="num">04 / INTERNALS</div>
+        <h3>Architecture</h3>
+        <p>The proxy loader, runtime boot order, hooks, event bus, DispatchGate, input gates and overlay.</p>
+        <span class="more">SEE THE DESIGN →</span>
+      </a>
+      <a class="card" href="research.html">
+        <div class="num">05 / RESEARCH</div>
+        <h3>Signatures &amp; research</h3>
+        <p>Why every address is resolved from a build-keyed pattern, the status ladder, and the tooling behind it.</p>
+        <span class="more">READ THE RULES →</span>
+      </a>
+      <a class="card" href="roadmap.html">
+        <div class="num">06 / STATUS</div>
+        <h3>Roadmap</h3>
+        <p>What is working, what is open with concrete leads, what is planned, and what is deliberately out of scope.</p>
+        <span class="more">CHECK STATUS →</span>
+      </a>
+    </div>
+
+    <h2 id="quickstart" style="margin-top:48px">Quick start</h2>
+    <p>Build the whole solution, then let the deploy script place it in Just Cause 3:</p>
+    <pre><code># build (VS 2026, platform toolset v145, x64)
+msbuild GrappleModLoader.sln /p:Configuration=Release /p:Platform=x64 /m
+
+# install into the game folder (backs up the previous dinput8.dll)
+.\tools\Deploy.ps1 -Configuration Release</code></pre>
+    <p>
+      Launch the game, press <span class="kbd">`</span> for the console and
+      <span class="kbd">Numpad 0</span> for the spawn menu. Full detail, including the exact
+      Visual Studio path, is in <a href="getting-started.html">Getting started</a>.
+    </p>
+
+    <h2 id="provenance">Source and provenance</h2>
+    <p>
+      The site summarises the public repository. The full reverse-engineering write-ups, signature
+      patterns and original recon notes live there:
+    </p>
+    <ul>
+      <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/ARCHITECTURE.md">ARCHITECTURE.md</a> — module layout and internals.</li>
+      <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/MOD_FORMAT.md">MOD_FORMAT.md</a> — the authoritative mod contract.</li>
+      <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/SIGNATURES.md">SIGNATURES.md</a> — schema, inventory and research rules.</li>
+      <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/RE_PLAYER_CHAIN.md">RE_PLAYER_CHAIN.md</a> — player chain, teleport, spawn and harvest evidence.</li>
+      <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/JC3_API_REFERENCE.md">JC3_API_REFERENCE.md</a> — the jc3-api provenance and build-mismatch proof.</li>
+      <li><a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/ROADMAP.md">ROADMAP.md</a> — the live status list.</li>
+    </ul>
+    <p>
+      Third-party research is credited: <strong>jc3-api</strong> (MIT, © 2016 Alexander Guettler)
+      supplied hash tables and the API blueprint; <strong>jc3-console-thingy</strong> (MIT,
+      © aaronkirkham) was cross-checked for the model-harvest mechanism. No game addresses from
+      either project are trusted as-is.
+    </p>
+
+    <p class="doc-meta">
+      Documentation for Grapple Mod Loader. Verified against build
+      <code>SizeOfImage 0x3241000</code> / <code>TimeDateStamp 0x5787641C</code>.
+      <a href="https://github.com/FrostiestCode/GrappleModLoader">View the source on GitHub</a>.
+    </p>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="../features.html">FEATURES</a> //
+    <a href="../index.html">HOME</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>

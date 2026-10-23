@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C++ API — Grapple Mod Loader</title>
+<meta name="description" content="Reference for the Grapple Mod Loader C ABI: versioned sub-APIs for core, memory, hooks, events, console, player, vehicle, entity, world, content, props, signatures and debug.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="C++ API — Grapple Mod Loader">
+<meta property="og:description" content="The public C ABI, result codes, types and sub-API reference.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="../index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="../features.html">Features</a>
+    <a href="index.html" aria-current="page">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="../index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="docs-shell">
+  <aside class="docs-sidebar">
+    <p class="docs-label">DOCUMENTATION</p>
+    <nav class="docs-nav" aria-label="Documentation">
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a href="mod-format.html">Mod format</a>
+      <a href="api.html" aria-current="page">C++ API</a>
+      <a href="architecture.html">Architecture</a>
+      <a href="research.html">Signatures &amp; research</a>
+      <a href="roadmap.html">Roadmap</a>
+    </nav>
+    <a class="docs-source" href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/docs">SOURCE DOCS ↗</a>
+  </aside>
+
+  <article class="docs-content">
+    <p class="crumbs"><a href="index.html">Docs</a> / C++ API</p>
+    <p class="eyebrow">DOCS // REFERENCE</p>
+    <h1>C++ API</h1>
+    <p class="lead">
+      The mod-facing surface is a pure C ABI made of versioned structs. This page is the map:
+      entry points, result codes, types, and every sub-API with its current status. The headers
+      remain the authority.
+    </p>
+
+    <div class="prose">
+      <div class="note">
+        <p>
+          <strong>Current ABI:</strong> <code>GML_ABI_VERSION 0x00010000</code> (1.0.0).
+          Include <code>&lt;gml/GML_Mod.h&gt;</code> and link <code>GrappleModLoader.lib</code>.
+          Sub-APIs are appended, fields are appended, and older loaders leave unknown pointers
+          <code>NULL</code>.
+        </p>
+      </div>
+
+      <h2 id="getting-the-api">Getting the API</h2>
+      <pre><code>#include &lt;gml/GML_Mod.h&gt;
+
+static int OnInit(const GML_ModContext* ctx)
+{
+    const GML_Api* api = ctx ? ctx-&gt;api : nullptr;
+    if (!api || !api-&gt;core) return GML_ERR_ABI;
+
+    // Null-check every sub-API you did not verify at compile time.
+    if (!api-&gt;console) return GML_ERR_UNAVAILABLE;
+
+    api-&gt;core-&gt;LogLine(GML_LOG_INFO, ctx-&gt;modId, "hello from my mod");
+    return GML_OK;
+}
+
+GML_MOD_ENTRY(OnInit)</code></pre>
+      <p>
+        Outside the entry point, call <code>GML_GetApi(sizeof(GML_Api))</code>. If a newer mod
+        asks for a larger struct than the loader knows, the loader returns a zero-padded copy, so
+        extra fields read as <code>NULL</code> instead of running off the end.
+      </p>
+
+      <h2 id="exports">Exported entry points</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Function</th><th scope="col">Purpose</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GML_GetApi(uint32_t requestedSize)</code></td><td>Returns the API table. Pass <code>sizeof(GML_Api)</code> from your build.</td></tr>
+            <tr><td><code>GML_GetLoaderVersionString()</code></td><td>Loader version as a string (currently <code>1.0.0</code>). Callable before <code>GML_GetApi</code>.</td></tr>
+            <tr><td><code>GML_FreeString(const char*)</code></td><td>Free a string the loader explicitly handed you. Do not free arbitrary pointers.</td></tr>
+            <tr><td><code>GML_ResultString(int32_t)</code></td><td>Human-readable result text; never <code>NULL</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="results">Result codes</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Value</th><th scope="col">Name</th><th scope="col">Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>0</code></td><td><code>GML_OK</code></td><td>Success.</td></tr>
+            <tr><td><code>-1</code></td><td><code>GML_ERR_FAILED</code></td><td>Generic failure.</td></tr>
+            <tr><td><code>-2</code></td><td><code>GML_ERR_INVALID_ARG</code></td><td>Bad argument, including a struct whose <code>size</code> field is too small.</td></tr>
+            <tr><td><code>-3</code></td><td><code>GML_ERR_NOT_FOUND</code></td><td>The requested thing does not exist.</td></tr>
+            <tr><td><code>-4</code></td><td><code>GML_ERR_NOT_RESOLVED</code></td><td>The feature needs a signature that is not resolved. <strong>Not a bug.</strong></td></tr>
+            <tr><td><code>-5</code></td><td><code>GML_ERR_NOT_SUPPORTED</code></td><td>Understood, but not supported by this loader/build.</td></tr>
+            <tr><td><code>-6</code></td><td><code>GML_ERR_ALREADY_EXISTS</code></td><td>Duplicate name, id or registration.</td></tr>
+            <tr><td><code>-7</code></td><td><code>GML_ERR_OUT_OF_MEMORY</code></td><td>Allocation failed.</td></tr>
+            <tr><td><code>-8</code></td><td><code>GML_ERR_GAME_VERSION</code></td><td>Signature keyed to a different exe build.</td></tr>
+            <tr><td><code>-9</code></td><td><code>GML_ERR_UNAVAILABLE</code></td><td>Subsystem disabled or init failed.</td></tr>
+            <tr><td><code>-10</code></td><td><code>GML_ERR_ABI</code></td><td>Mod built against an incompatible SDK.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="types">Core types</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Type</th><th scope="col">Definition</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GML_Version</code></td><td><code>uint16_t major, minor, patch; uint32_t build;</code></td></tr>
+            <tr><td><code>GML_Vec2</code> / <code>Vec3</code> / <code>Vec4</code></td><td>Float vectors; <code>Vec3</code> is <code>{x,y,z}</code>.</td></tr>
+            <tr><td><code>GML_Quat</code> / <code>GML_Color</code></td><td><code>{x,y,z,w}</code> and <code>{r,g,b,a}</code>.</td></tr>
+            <tr><td><code>GML_Matrix</code></td><td><code>float m[16]</code>, row-major.</td></tr>
+            <tr><td><code>GML_Bounds</code></td><td><code>{GML_Vec3 min, max}</code>.</td></tr>
+            <tr><td><code>GML_HookHandle</code> / <code>GML_SubHandle</code></td><td><code>uint64_t</code>; <code>0</code> is invalid.</td></tr>
+            <tr><td><code>GML_EventId</code></td><td><code>uint32_t</code>; <code>0</code> is invalid.</td></tr>
+            <tr><td><code>GML_GameInfo</code></td><td>Exe name, image base/size, timestamp, SHA-256, <code>known</code> flag, build label.</td></tr>
+            <tr><td><code>GML_SigStatusInfo</code></td><td>Name, kind, status, address, source and note for one signature.</td></tr>
+            <tr><td><code>GML_RaycastHit</code></td><td>Hit flag, point, normal, distance, entity; starts with <code>size</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>
+        Limits: <code>GML_MAX_PATH 512</code>, <code>GML_MAX_NAME 128</code>,
+        <code>GML_MAX_SIGNATURE 512</code>. Log levels are <code>TRACE</code>,
+        <code>DEBUG</code>, <code>INFO</code>, <code>WARN</code>, <code>ERROR</code>,
+        <code>FATAL</code>.
+      </p>
+
+      <h2 id="core">Core</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GetLoaderVersion()</code></td><td>Version struct.</td></tr>
+            <tr><td><code>GetGameInfo()</code></td><td>Exe fingerprint; check <code>known</code> before trusting signature-resolved features.</td></tr>
+            <tr><td><code>GetBasePath()</code> / <code>GetLogPath()</code> / <code>GetCurrentModPath()</code></td><td>Install root, logs directory, and this mod's folder.</td></tr>
+            <tr><td><code>LogLine(level, tag, message)</code> / <code>Logf(...)</code></td><td>Log to the file, the overlay and the external console.</td></tr>
+            <tr><td><code>ConfigGetString/Int/Bool/Float</code></td><td>Read <code>config.json</code> with dotted or flat keys.</td></tr>
+            <tr><td><code>ConfigSetString</code></td><td>Write a string value and persist it.</td></tr>
+            <tr><td><code>IsModEnabled(modId)</code></td><td>Current enabled state for a mod.</td></tr>
+            <tr><td><code>Alloc</code> / <code>Realloc</code> / <code>Free</code> / <code>StrDup</code></td><td>Loader-owned memory for data crossing the module boundary.</td></tr>
+            <tr><td><code>GetTickCount64()</code> / <code>GetUptime()</code></td><td>Milliseconds and seconds; GML already has its own tick thread.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="memory">Memory</h2>
+      <p>All accessors tolerate bad pointers and return an error instead of faulting.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GetModuleBase</code> / <code>GetModuleSize</code></td><td><code>NULL</code> means the main exe.</td></tr>
+            <tr><td><code>ModuleRva(module, rva)</code></td><td>Base + RVA.</td></tr>
+            <tr><td><code>GetProcAddress</code></td><td>Export lookup without a message box on failure.</td></tr>
+            <tr><td><code>GetSectionRange</code></td><td>Begin/end of a PE section.</td></tr>
+            <tr><td><code>IsReadable</code> / <code>IsWritable</code></td><td>Range checks.</td></tr>
+            <tr><td><code>Read</code> / <code>Write</code> / <code>Fill</code> / <code>Nop</code></td><td>Guarded copies and patches.</td></tr>
+            <tr><td><code>GetProtection</code> / <code>WithWritable</code></td><td>Inspect or temporarily change page protection around a callback.</td></tr>
+            <tr><td><code>FindPattern(module, section, pattern)</code></td><td>IDA-style bytes; <code>??</code> wildcards. <code>NULL</code> section scans all readable sections.</td></tr>
+            <tr><td><code>FindPatternAll</code></td><td>Collect up to <code>maxCount</code> matches; gets the true count.</td></tr>
+            <tr><td><code>ResolveRelative</code></td><td>Follow a RIP-relative operand.</td></tr>
+            <tr><td><code>Deref(base, offsets, count)</code></td><td>Walk a pointer chain.</td></tr>
+            <tr><td><code>ResolveCall</code></td><td>Follow <code>call rel32</code> / <code>jmp rel32</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="hooks">Hooks</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Inline(target, detour, &amp;original, name)</code></td><td>Trampoline hook via MinHook; <code>original</code> is callable.</td></tr>
+            <tr><td><code>Iat(module, importModule, proc, detour, &amp;original, name)</code></td><td>Patch an import slot.</td></tr>
+            <tr><td><code>Vtable(objectOrVtable, index, detour, &amp;original, name)</code></td><td>Accepts an object (uses its vptr) or a vtable address.</td></tr>
+            <tr><td><code>PatchBytes(target, bytes, length, name)</code></td><td>Overwrite bytes verbatim and restore later.</td></tr>
+            <tr><td><code>Enable</code> / <code>Disable</code> / <code>Remove</code> / <code>IsEnabled</code></td><td>Lifecycle for one handle.</td></tr>
+            <tr><td><code>SetOwnerEnabled</code> / <code>RemoveOwner</code></td><td>Bulk operations by mod owner name.</td></tr>
+            <tr><td><code>Count</code> / <code>Enumerate</code> / <code>Describe</code></td><td>Inventory for diagnostics and <code>gml.hooks</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="events">Events</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GetId(name)</code> / <code>GetName(id)</code></td><td>Intern a string into a stable id.</td></tr>
+            <tr><td><code>Subscribe(id, fn, user, priority, owner)</code></td><td>Lower priority runs first. Pass your mod id as owner.</td></tr>
+            <tr><td><code>Unsubscribe(handle)</code> / <code>UnsubscribeOwner(owner)</code></td><td>Remove one subscription or every subscription for an owner.</td></tr>
+            <tr><td><code>Emit(id, payload, size)</code> / <code>EmitName(...)</code></td><td>Dispatch outside the mutex, so handlers may emit.</td></tr>
+            <tr><td><code>ListenerCount</code> / <code>EventCount</code></td><td>Diagnostics.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p>Event ids live in <code>api-&gt;events</code>; the names and payloads are listed on <a href="mod-format.html#events">Mod format</a>.</p>
+
+      <h2 id="console">Console</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>RegisterCommand(name, help, usage, fn, user)</code></td><td>Adds to <code>help</code> and the command registry.</td></tr>
+            <tr><td><code>UnregisterCommand</code> / <code>UnregisterOwner</code></td><td>Remove one command or all owned by a mod.</td></tr>
+            <tr><td><code>Print</code> / <code>Printf</code></td><td>Write to the overlay scrollback and log sinks.</td></tr>
+            <tr><td><code>IsVisible</code> / <code>SetVisible</code></td><td>Open or close the overlay console.</td></tr>
+            <tr><td><code>Execute(line, out, user)</code></td><td>Run a command line as if typed.</td></tr>
+            <tr><td><code>FeedInput(text)</code></td><td>Feed raw text, including Enter, from a custom UI.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="player">Player</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Status</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>IsAvailable</code> / <code>GetActor</code></td><td><span class="badge ok">Verified</span> Player chain.</td></tr>
+            <tr><td><code>GetPosition</code> / <code>SetPosition</code></td><td><span class="badge ok">Verified</span> Moves Rico; the engine keeps the new transform.</td></tr>
+            <tr><td><code>GetHealth</code> / <code>SetHealth</code></td><td><span class="badge ok">Verified</span> Through the player chain.</td></tr>
+            <tr><td><code>GetVelocity</code> / <code>SetVelocity</code></td><td><span class="badge no">Unresolved</span> Signature-dependent.</td></tr>
+            <tr><td><code>GetAimDirection</code></td><td><span class="badge no">Unresolved</span> Needs an aim signature.</td></tr>
+            <tr><td><code>GetGrappleState</code> / <code>IsOnGround</code></td><td><span class="badge no">Unresolved</span> Future work.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="vehicle">Vehicle</h2>
+      <p>
+        The shape is defined — <code>IsAvailable</code>, <code>GetCurrent</code>,
+        <code>IsPlayerInVehicle</code>, position/velocity/direction, health, boost and speed — but
+        the vehicle signatures are not mapped on this build. Calls return
+        <code>GML_ERR_NOT_RESOLVED</code>. Vehicle teleport specifically fails because the
+        interaction-context chain used on foot is absent while driving.
+      </p>
+
+      <h2 id="entity">Entity</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>IsAvailable</code> / <code>IsValid</code> / <code>GetId</code> / <code>GetTypeName</code></td><td>Availability follows the signature database.</td></tr>
+            <tr><td><code>GetPlayer</code></td><td>Player object through the local-player route when available.</td></tr>
+            <tr><td><code>Get/SetPosition</code>, <code>Get/SetVelocity</code>, <code>Get/SetHealth</code>, <code>GetBounds</code></td><td>Generic entity accessors; each needs its own resolved entry.</td></tr>
+            <tr><td><code>Destroy</code></td><td><span class="badge no">Unresolved</span> <code>Entity::Destroy</code> still needs research.</td></tr>
+            <tr><td><code>GetCount</code> / <code>GetByIndex</code></td><td>Bridges to world iteration; world signatures are unresolved.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="world">World</h2>
+      <p>
+        <code>IsLoading</code>, time of day, weather, active region, entity count, raycast and map
+        marker are defined and degrade honestly. No <code>World::*</code> signatures are recorded
+        yet, so expect <code>GML_ERR_NOT_RESOLVED</code>.
+      </p>
+
+      <h2 id="content">Content</h2>
+      <p>This one is real and testable today; it reads files GML knows about on disk, with no game internals.</p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GetArchiveCount</code> / <code>GetArchiveInfo</code></td><td>Installed archives: path, size, first four bytes (e.g. <code>RTPC</code>).</td></tr>
+            <tr><td><code>GetDropzoneFileCount</code> / <code>GetDropzoneFile</code></td><td>Loose <code>.ee</code> overrides in <code>dropzone</code>.</td></tr>
+            <tr><td><code>ReadFile</code> / <code>WriteFile</code></td><td>Game-relative paths; write can keep a <code>.bak</code>.</td></tr>
+            <tr><td><code>FreeBuffer</code></td><td>Free a buffer returned by <code>ReadFile</code>.</td></tr>
+            <tr><td><code>ListDirectory</code></td><td>Enumerate loose files, recursively if asked.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="prop">Prop</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Status</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>IsAvailable</code></td><td><span class="badge ok">Verified</span> Spawn chain resolved.</td></tr>
+            <tr><td><code>Spawn(modelName, position)</code></td><td><span class="badge ok">Verified</span> Async; returns a handle, or <code>NULL</code>.</td></tr>
+            <tr><td><code>GetPosition</code> / <code>SetPosition</code></td><td>Works on spawned objects through their local transform.</td></tr>
+            <tr><td><code>GetHealth</code> / <code>SetHealth</code></td><td>Game stores <code>int16</code>; surfaced as float and clamped on write.</td></tr>
+            <tr><td><code>GetModelHash</code></td><td>Resolves a name through <code>SpawnSystem::GetModelHash</code> when bound; GML also computes <code>hashlittle</code> itself.</td></tr>
+            <tr><td><code>Destroy</code></td><td><span class="badge no">Unresolved</span> Blocked on <code>Entity::Destroy</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="signatures">Signatures</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>GetStatus(name, &amp;info)</code></td><td>Kind, status, address, source and note.</td></tr>
+            <tr><td><code>GetAddress(name)</code></td><td>Resolved address or <code>NULL</code>.</td></tr>
+            <tr><td><code>Count</code> / <code>GetNameAt</code></td><td>Enumerate the database.</td></tr>
+            <tr><td><code>Reload(pathOrNull)</code></td><td>Re-read <code>signatures.json</code>; returns entries resolved.</td></tr>
+            <tr><td><code>ResolvedCount</code></td><td>How many entries are live.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="debug">Debug</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Method</th><th scope="col">Notes</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>TriggerCrash(reason)</code></td><td>Deliberately crash to exercise the handler and dump path.</td></tr>
+            <tr><td><code>WriteDump(reason)</code></td><td>Write a minidump and report without crashing.</td></tr>
+            <tr><td><code>GetDumpDirectory()</code></td><td>Where dumps and reports go.</td></tr>
+            <tr><td><code>DumpDiagnostics()</code></td><td>Print modules, hooks, subscriptions and mods.</td></tr>
+            <tr><td><code>ReloadMods()</code></td><td>Programmatic equivalent of <code>gml.mod reload</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="status">Status at a glance</h2>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th scope="col">Area</th><th scope="col">State on the recorded build</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Core, memory, hooks, events, console</td><td><span class="badge ok">Implemented</span> Loader-side; no game signature required.</td></tr>
+            <tr><td>Player position and health</td><td><span class="badge ok">Verified</span></td></tr>
+            <tr><td>Prop spawn</td><td><span class="badge ok">Verified</span> Async handles recorded.</td></tr>
+            <tr><td>Content / archive access</td><td><span class="badge ok">Implemented</span> Testable today.</td></tr>
+            <tr><td>Signature inspection and debug</td><td><span class="badge ok">Implemented</span></td></tr>
+            <tr><td>Vehicle, world, entity destroy</td><td><span class="badge no">Unresolved</span> Returns <code>GML_ERR_NOT_RESOLVED</code>.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="note warn">
+        <p>
+          Do not treat <code>GML_ERR_NOT_RESOLVED</code> as a transient failure. It means the
+          feature is deliberately unavailable until someone researches its signature on this build
+          and proves it in game. Guessing an address is how a mod turns a missing feature into a
+          crash.
+        </p>
+      </div>
+
+      <p class="doc-meta">
+        Reference generated from
+        <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/src/GML.SDK/include/gml/GML_Api.h">GML_Api.h</a>,
+        <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/src/GML.SDK/include/gml/GML_Types.h">GML_Types.h</a> and
+        <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/src/GML.SDK/include/gml/GML_Mod.h">GML_Mod.h</a>.
+        The headers are the authority if this page and the code disagree.
+      </p>
+
+      <div class="pager">
+        <a href="mod-format.html">← MOD FORMAT</a>
+        <a class="next" href="architecture.html">ARCHITECTURE →</a>
+      </div>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="../features.html">FEATURES</a> //
+    <a href="../index.html">HOME</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>

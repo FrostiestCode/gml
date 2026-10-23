@@ -1,220 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Grapple Mod Loader</title>
-<style>
-:root {
-  --bg: #050608;
-  --panel: rgba(10, 13, 17, .72);
-  --line: rgba(255,255,255,.09);
-  --text: #f4f7f8;
-  --muted: #8d979e;
-  --accent: #ff6b22;
-  --accent2: #ffb347;
-}
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
-body {
-  margin: 0;
-  min-height: 100vh;
-  overflow-x: hidden;
-  background: var(--bg);
-  color: var(--text);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif;
-}
-#ascii {
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  width: 100%;
-  height: 100%;
-  opacity: .58;
-  pointer-events: none;
-}
-.vignette {
-  position: fixed; inset: 0; z-index: -1; pointer-events: none;
-  background:
-    radial-gradient(circle at var(--mx,50%) var(--my,40%), rgba(255,107,34,.10), transparent 28%),
-    radial-gradient(circle at 50% 30%, transparent 0%, rgba(0,0,0,.2) 55%, rgba(0,0,0,.75) 100%);
-}
-nav {
-  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
-  width: min(1120px, calc(100% - 32px)); z-index: 10;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  background: rgba(5,6,8,.66);
-  backdrop-filter: blur(18px);
-}
-.brand { display:flex; align-items:center; gap:10px; font-weight:800; letter-spacing:.04em; }
-.dot { width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 18px var(--accent); }
-.links { display:flex; gap:22px; }
-.links a { color:var(--muted); text-decoration:none; font-size:14px; }
-.links a:hover { color:white; }
-.hero {
-  min-height: 92vh; max-width:1120px; margin:auto; padding:180px 24px 90px;
-  display:flex; flex-direction:column; justify-content:center;
-}
-.eyebrow {
-  color:var(--accent2); font: 700 12px/1 monospace; letter-spacing:.2em;
-  text-transform:uppercase; margin-bottom:18px;
-}
-h1 { font-size:clamp(58px, 10vw, 132px); line-height:.82; letter-spacing:-.075em; margin:0; max-width:850px; }
-h1 span { color:transparent; -webkit-text-stroke:1px rgba(255,255,255,.48); }
-.hero p { max-width:650px; color:#aeb6bb; font-size:18px; line-height:1.7; margin:28px 0; }
-.buttons { display:flex; gap:12px; flex-wrap:wrap; }
-.btn {
-  display:inline-flex; align-items:center; justify-content:center; padding:13px 18px;
-  border-radius:10px; border:1px solid var(--line); color:white; text-decoration:none;
-  background:rgba(255,255,255,.045); font-weight:700; font-size:14px;
-}
-.btn.primary { background:var(--accent); color:#130a05; border-color:var(--accent); }
-.btn:hover { transform:translateY(-2px); }
-section { max-width:1120px; margin:auto; padding:90px 24px; }
-.grid { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
-.card {
-  padding:25px; min-height:190px; border:1px solid var(--line); border-radius:18px;
-  background:var(--panel); backdrop-filter:blur(14px);
-}
-.card .num { font:12px monospace; color:var(--accent); }
-.card h3 { margin:28px 0 10px; font-size:21px; }
-.card p { margin:0; color:var(--muted); line-height:1.65; }
-.section-title { font-size:42px; letter-spacing:-.04em; margin:0 0 35px; }
-.status {
-  display:flex; align-items:center; gap:10px; color:#aeb6bb; font:13px monospace;
-  margin-top:30px;
-}
-.status i { width:8px;height:8px;border-radius:50%;background:#61e294;box-shadow:0 0 12px #61e294; }
-footer { max-width:1120px; margin:auto; padding:40px 24px 70px; color:#687178; font:12px monospace; }
-@media(max-width:760px) {
-  .links { display:none; }
-  .grid { grid-template-columns:1fr; }
-  h1 { font-size:64px; }
-  .hero { padding-top:145px; }
-}
-</style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grapple Mod Loader — native C++ modding for Just Cause 3</title>
+<meta name="description" content="Grapple Mod Loader is a native C++ mod loader for Just Cause 3. Signature-resolved game access, a stable mod ABI, an in-game console, spawn menu and overlay — working in game today.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Grapple Mod Loader — native C++ modding for Just Cause 3">
+<meta property="og:description" content="Signature-resolved game access, a stable C ABI, and real tools — console, spawn menu and overlay. Working in game on the recorded Just Cause 3 build.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/site.js" defer></script>
 </head>
-<body>
-<canvas id="ascii"></canvas>
-<div class="vignette"></div>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
 
-<nav>
-  <div class="brand"><i class="dot"></i> GRAPPLE MOD LOADER</div>
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
   <div class="links">
-    <a href="#features">Features</a>
-    <a href="#mods">Mods</a>
-    <a href="#docs">Docs</a>
-    <a href="#download">Download</a>
+    <a href="features.html">Features</a>
+    <a href="docs/index.html">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="#download">Download</a>
   </div>
 </nav>
 
-<main>
+<main id="main">
   <div class="hero">
-    <div class="eyebrow">JUST CAUSE 3 // COMMUNITY MODDING</div>
+    <p class="eyebrow">JUST CAUSE 3 // NATIVE C++ MODDING</p>
     <h1>BREAK THE<br><span>LIMITS.</span></h1>
     <p>
-      A native C++ mod loader built for Just Cause 3.
-      Load mods, expose game systems, and build the tooling the community has been missing.
+      A native C++ mod loader for Just Cause 3. Signature-resolved game access,
+      a stable mod ABI, and real developer tools — a console, spawn menu and overlay —
+      working in game today.
     </p>
     <div class="buttons">
-      <a class="btn primary" href="#download">DOWNLOAD GML</a>
-      <a class="btn" href="#features">EXPLORE →</a>
+      <a class="btn primary" href="#download">GET GML</a>
+      <a class="btn" href="docs/index.html">READ THE DOCS</a>
     </div>
-    <div class="status"><i></i> RUNTIME ONLINE // C++ MOD API IN DEVELOPMENT</div>
+    <p class="status"><i aria-hidden="true"></i> WORKING IN GAME // BUILD 0x5787641C</p>
+    <div class="stats" aria-label="Project at a glance">
+      <div class="stat"><b>795</b><span>catalog names in a fresh session</span></div>
+      <div class="stat"><b>4</b><span>sample mods in the repo</span></div>
+      <div class="stat"><b>0</b><span>hard-coded game addresses</span></div>
+      <div class="stat"><b>1</b><span>proxy DLL to install</span></div>
+    </div>
   </div>
 
-  <section id="features">
-    <h2 class="section-title">Built for adding, not replacing.</h2>
+  <section class="block" id="features">
+    <div class="section-head">
+      <h2 class="section-title">Built for adding, not replacing.</h2>
+      <a class="section-link" href="features.html">ALL FEATURES →</a>
+    </div>
     <div class="grid">
-      <article class="card"><div class="num">01 / RUNTIME</div><h3>Native Mod Loading</h3><p>Load C++ mods directly into the game through a lightweight native runtime.</p></article>
-      <article class="card"><div class="num">02 / API</div><h3>Game APIs</h3><p>Expose reusable systems so mods can work together instead of living as isolated hacks.</p></article>
-      <article class="card"><div class="num">03 / TOOLS</div><h3>Developer First</h3><p>Console, diagnostics, signatures and tooling designed around actual mod development.</p></article>
+      <a class="card" href="docs/mod-format.html">
+        <div class="num">01 / RUNTIME</div>
+        <h3>Native mod loading</h3>
+        <p>A lightweight <code>dinput8.dll</code> proxy boots a C++ core, loads 64-bit mod DLLs against a stable C ABI, and hot-reloads them without restarting the game.</p>
+        <span class="more">MOD FORMAT →</span>
+      </a>
+      <a class="card" href="docs/research.html">
+        <div class="num">02 / GAME ACCESS</div>
+        <h3>Signatures, not guesses</h3>
+        <p>Every game address resolves from a build-keyed signature database and byte-verifies at load. Unknown builds get an honest error instead of a crash.</p>
+        <span class="more">SIGNATURES &amp; RESEARCH →</span>
+      </a>
+      <a class="card" href="features.html">
+        <div class="num">03 / TOOLING</div>
+        <h3>A real dev kit</h3>
+        <p>In-game console, transparent overlay, GMod-style spawn menu, runtime model harvesting, crash dumps, signature inspection and an event bus.</p>
+        <span class="more">SEE WHAT WORKS →</span>
+      </a>
     </div>
   </section>
 
-  <section id="mods">
-    <h2 class="section-title">Your game. Your rules.</h2>
-    <div class="card">
-      <div class="num">GML / EXTENSIBLE</div>
-      <h3>From tiny tweaks to total chaos.</h3>
-      <p>
-        Grapple is designed as an extensible foundation for the Just Cause 3 modding
-        ecosystem. Add gameplay systems, world tools, scripting bridges and experimental features
-        without forcing every mod to replace the same game components.
-      </p>
+  <section class="block" id="mods">
+    <div class="section-head">
+      <h2 class="section-title">Your game. Your rules.</h2>
+      <a class="section-link" href="docs/roadmap.html">ROADMAP →</a>
+    </div>
+    <div class="grid two">
+      <article class="card">
+        <div class="num">SPAWN MENU // NUMPAD 0</div>
+        <h3>Anything in the catalog.</h3>
+        <p>795 names in a fresh session: 195 vehicles, 84 weapons, and 516 characters, animals, props and DLC. Entries are source-tagged and the list grows while you play.</p>
+      </article>
+      <article class="card">
+        <div class="num">TELEPORT // TP.SET</div>
+        <h3>A teleport that sticks.</h3>
+        <p>GML writes through the interaction context and lets the engine re-derive its own transform, so Rico stays where you put him instead of snapping back.</p>
+      </article>
+      <article class="card">
+        <div class="num">CONSOLE // TILDE</div>
+        <h3>Developer access, in game.</h3>
+        <p>Transparent overlay console with scrollback and an optional external Win32 console. While a panel is open, gameplay input is fully gated.</p>
+      </article>
+      <article class="card">
+        <div class="num">MODS // HOT RELOAD</div>
+        <h3>Reload without a restart.</h3>
+        <p><code>gml.mod reload</code> unloads a mod safely through the DispatchGate, so its hooks, events and commands go away cleanly before the new DLL loads.</p>
+      </article>
     </div>
   </section>
 
-  <section id="docs">
-    <h2 class="section-title">Documentation</h2>
+  <section class="block" id="docs">
+    <div class="section-head">
+      <h2 class="section-title">Documentation</h2>
+      <a class="section-link" href="docs/index.html">DOCS HOME →</a>
+    </div>
     <div class="grid">
-      <article class="card"><div class="num">GETTING STARTED</div><h3>Install</h3><p>Drop the loader into your game directory and start building your first mod.</p></article>
-      <article class="card"><div class="num">MOD API</div><h3>C++ SDK</h3><p>Learn the runtime interfaces and build against the Grapple SDK.</p></article>
-      <article class="card"><div class="num">COMMUNITY</div><h3>Contribute</h3><p>Help reverse engineer systems, improve APIs and create new tooling.</p></article>
+      <a class="card" href="docs/getting-started.html">
+        <div class="num">START HERE</div>
+        <h3>Getting started</h3>
+        <p>Build the solution, deploy into Just Cause 3, launch, and verify that signatures resolved on your build.</p>
+        <span class="more">INSTALL GML →</span>
+      </a>
+      <a class="card" href="docs/mod-format.html">
+        <div class="num">MODDING</div>
+        <h3>Mod format</h3>
+        <p><code>mod.json</code>, the DLL entry contract, ABI rules, events, console commands and the hot-reload lifecycle.</p>
+        <span class="more">WRITE A MOD →</span>
+      </a>
+      <a class="card" href="docs/api.html">
+        <div class="num">REFERENCE</div>
+        <h3>C++ API</h3>
+        <p>The public C ABI: versioned sub-APIs for core, memory, hooks, events, console, player, props, content and signatures.</p>
+        <span class="more">API REFERENCE →</span>
+      </a>
     </div>
   </section>
 
-  <section id="download">
+  <section class="block" id="download">
     <h2 class="section-title">Ready to grapple?</h2>
-    <p style="color:var(--muted);max-width:600px;line-height:1.7">
-      Replace this button with your GitHub release, Discord, or download endpoint when the first public build is ready.
+    <p class="download-copy">
+      GML is a drop-in <code>dinput8.dll</code> proxy. The deploy script backs up the previous
+      DLL and mirrors the loader, config, signatures and sample mods into your Just Cause 3
+      folder. Uninstalling restores what was there before.
     </p>
-    <div class="buttons"><a class="btn primary" href="#">DOWNLOAD LATEST BUILD</a><a class="btn" href="#">VIEW SOURCE</a></div>
+    <div class="buttons">
+      <a class="btn primary" href="https://github.com/FrostiestCode/GrappleModLoader/releases/latest" target="_blank" rel="noopener noreferrer">DOWNLOAD LATEST BUILD</a>
+      <a class="btn" href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">VIEW SOURCE</a>
+      <a class="btn" href="docs/getting-started.html">INSTALL GUIDE</a>
+    </div>
+    <p class="status"><i aria-hidden="true"></i> VERIFIED ON SIZE OF IMAGE 0x3241000 // TIMESTAMP 0x5787641C</p>
   </section>
 </main>
 
-<footer>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</footer>
-
-<script>
-const canvas = document.getElementById('ascii');
-const ctx = canvas.getContext('2d');
-const chars = " .·:+*#%@";
-let W, H, cols, rows, font = 12;
-let mx = innerWidth/2, my = innerHeight/2, t = 0;
-
-function resize(){
-  const dpr = Math.min(devicePixelRatio || 1, 2);
-  W = innerWidth; H = innerHeight;
-  canvas.width = W*dpr; canvas.height = H*dpr;
-  canvas.style.width = W+'px'; canvas.style.height = H+'px';
-  ctx.setTransform(dpr,0,0,dpr,0,0);
-  cols = Math.ceil(W/font); rows = Math.ceil(H/font);
-}
-addEventListener('resize', resize);
-addEventListener('pointermove', e => {
-  mx = e.clientX; my = e.clientY;
-  document.documentElement.style.setProperty('--mx', mx+'px');
-  document.documentElement.style.setProperty('--my', my+'px');
-});
-resize();
-
-function draw(){
-  t += .012;
-  ctx.clearRect(0,0,W,H);
-  ctx.font = font + "px monospace";
-  ctx.textBaseline = "top";
-  for(let y=0;y<rows;y++){
-    for(let x=0;x<cols;x++){
-      const px=x*font, py=y*font;
-      const dx=px-mx, dy=py-my;
-      const dist=Math.sqrt(dx*dx+dy*dy);
-      const wave=Math.sin(x*.22+y*.14+t*3.0)*.5+.5;
-      const mouse=Math.max(0,1-dist/260);
-      const v=Math.max(0, Math.min(1, wave*.22+mouse*.78));
-      const c=chars[Math.floor(v*(chars.length-1))];
-      if(c!==" "){
-        const alpha=.10+mouse*.42+wave*.08;
-        ctx.fillStyle=`rgba(255,${100+Math.floor(mouse*80)},${35+Math.floor(mouse*35)},${alpha})`;
-        ctx.fillText(c,px,py);
-      }
-    }
-  }
-  requestAnimationFrame(draw);
-}
-draw();
-</script>
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="features.html">FEATURES</a> //
+    <a href="docs/index.html">DOCS</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
 </body>
 </html>

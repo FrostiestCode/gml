@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Architecture — Grapple Mod Loader</title>
+<meta name="description" content="How Grapple Mod Loader fits together: the dinput8 proxy, runtime boot order, hooks, event bus and DispatchGate, input gating, D3D11 overlay, SEH boundary and game model.">
+<meta name="theme-color" content="#050608">
+<meta name="color-scheme" content="dark">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Grapple Mod Loader">
+<meta property="og:title" content="Architecture — Grapple Mod Loader">
+<meta property="og:description" content="The loader, core runtime, hooks, event bus, input gates and overlay that make GML work.">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/site.js" defer></script>
+</head>
+<body id="top">
+<a class="skip" href="#main">Skip to content</a>
+<canvas id="field" aria-hidden="true"></canvas>
+<canvas id="glow" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<nav class="primary" aria-label="Primary">
+  <a class="brand" href="../index.html"><i class="dot" aria-hidden="true"></i> GRAPPLE MOD LOADER</a>
+  <div class="links">
+    <a href="../features.html">Features</a>
+    <a href="index.html" aria-current="page">Docs</a>
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a class="nav-dl" href="../index.html#download">Download</a>
+  </div>
+</nav>
+
+<main id="main" class="docs-shell">
+  <aside class="docs-sidebar">
+    <p class="docs-label">DOCUMENTATION</p>
+    <nav class="docs-nav" aria-label="Documentation">
+      <a href="index.html">Overview</a>
+      <a href="getting-started.html">Getting started</a>
+      <a href="mod-format.html">Mod format</a>
+      <a href="api.html">C++ API</a>
+      <a href="architecture.html" aria-current="page">Architecture</a>
+      <a href="research.html">Signatures &amp; research</a>
+      <a href="roadmap.html">Roadmap</a>
+    </nav>
+    <a class="docs-source" href="https://github.com/FrostiestCode/GrappleModLoader/tree/main/docs">SOURCE DOCS ↗</a>
+  </aside>
+
+  <article class="docs-content">
+    <p class="crumbs"><a href="index.html">Docs</a> / Architecture</p>
+    <p class="eyebrow">DOCS // INTERNALS</p>
+    <h1>Architecture</h1>
+    <p class="lead">
+      Two DLLs, one game import, and a rule that nothing may hard-code a game address. This page
+      follows the boot path and explains why each piece is shaped the way it is.
+    </p>
+
+    <div class="prose">
+      <h2 id="shape">Shape of the install</h2>
+      <div class="diagram">JustCause3.exe
+  │
+  │ imports DirectInput8Create
+  ├─ dinput8.dll              GML.Loader
+  │                            forwards to the real dinput8,
+  │                            then loads the core
+  │
+  └─ GrappleModLoader.dll     GML.Core
+       ├─ core/Runtime        boot order and ownership
+       ├─ core/GameVersion    exe fingerprint
+       ├─ core/SignatureDb    signatures.json
+       ├─ core/Hook           inline / IAT / vtable / byte hooks
+       ├─ core/Event          event bus + DispatchGate
+       ├─ core/Console        command registry and scrollback
+       ├─ core/InputBlock     gameplay input gates
+       ├─ core/Seh            the single __try boundary
+       ├─ core/Crash          minidumps and reports
+       ├─ overlay/            D3D11 Present hook, text renderer, panels
+       ├─ game/               player, props, catalog, harvest, C ABI
+       └─ mods/ModLoader      discovery, order, init/shutdown, reload</div>
+
+      <h2 id="loader">The loader stays boring</h2>
+      <p>
+        Just Cause 3 imports exactly one function from <code>dinput8.dll</code>:
+        <code>DirectInput8Create</code>. GML's proxy forwards that call to the real system DLL and
+        loads <code>GrappleModLoader.dll</code>. It does nothing else.
+      </p>
+      <p>
+        That constraint is deliberate. The loader runs before any of GML exists, so it is the one
+        component that cannot fail loudly or depend on configuration, signatures or the overlay.
+        If the proxy is wrong, nothing else gets a chance to report why.
+      </p>
+
+      <h2 id="boot">Boot order</h2>
+      <p>The core runtime initialises in a fixed order:</p>
+      <ol>
+        <li>Detect the game version and fingerprint the exe.</li>
+        <li>Resolve install paths and load <code>config.json</code>.</li>
+        <li>Load <code>signatures.json</code>, scan patterns and verify bytes.</li>
+        <li>Install the hooks the resolved signatures allow.</li>
+        <li>Start the crash handler and input gates.</li>
+        <li>Start runtime model harvesting and the tick thread.</li>
+        <li>Discover and load mods in priority order.</li>
+      </ol>
+      <p>
+        Anything unresolved is skipped and logged. The rest of the loader still comes up, which is
+        why the console remains useful even when a gameplay feature is unavailable.
+      </p>
+
+      <h2 id="signatures">Signatures, not addresses</h2>
+      <p>
+        <code>signatures.json</code> is the only place a game address may live, and even there the
+        entry stores <em>how to find</em> the address rather than the address itself. Each entry
+        carries a module, section, byte pattern, optional RIP-relative operand, dereference chain
+        and verification bytes. The running exe's fingerprint must match the build the entry was
+        researched against.
+      </p>
+      <p>
+        If the fingerprint does not match, the entry resolves to nothing and callers get
+        <code>GML_ERR_NOT_RESOLVED</code>. The <a href="research.html">research page</a> covers the
+        status ladder and the rules for adding an entry.
+      </p>
+
+      <h2 id="hooks">Hooks</h2>
+      <p>
+        One registry owns every hook: inline trampolines, IAT slots, vtable slots and raw byte
+        patches. Each hook records its owner (the mod id or a core subsystem), so unloading a mod
+        can remove exactly its hooks without touching anyone else's.
+      </p>
+      <p>
+        Hooks are for observation and input, not for rewriting gameplay logic. Transforms are
+        changed through data the engine already consults, which is why the teleport survives.
+      </p>
+
+      <h2 id="dispatchgate">Event bus and the DispatchGate</h2>
+      <p>
+        Mods subscribe to string-named events: <code>gml.tick</code>,
+        <code>gml.present</code>, <code>gml.console.command</code>, and so on. Dispatch copies
+        the listener list and calls handlers <em>outside</em> the mutex, so a handler may emit
+        another event without self-deadlocking.
+      </p>
+      <p>
+        The <strong>DispatchGate</strong> is a reader/writer gate between dispatch and module
+        unloading. <code>Emit</code> enters as a reader. Unloading a DLL enters as the writer and
+        waits until every in-flight callback has returned.
+      </p>
+      <div class="note warn">
+        <p>
+          Before the gate existed, a reload on the window thread could <code>FreeLibrary</code> a
+          mod while the render thread was still inside its Present listener. The game died in the
+          unloaded DLL's frame. The gate is the fix, and it is why reload survives repeated
+          hot-swaps.
+        </p>
+        <p>
+          A listener that requests a reload from inside a dispatch cannot take the writer lock
+          without deadlocking against itself. That case is detected, logged, and unload runs
+          ungated as a loud best effort.
+        </p>
+      </div>
+      <p>
+        The second rule from the same incident: subscribe with your <strong>mod id</strong> as the
+        owner. A literal owner string leaks the subscription across reloads, and the dangling
+        pointer faults every tick afterwards.
+      </p>
+
+      <h2 id="input">Input gating</h2>
+      <p>JC3 reads gameplay input through two paths that bypass ordinary window messages:</p>
+      <ol>
+        <li><strong>DirectInput</strong> <code>GetDeviceState</code> / <code>GetDeviceData</code> for the keyboard. GML inline-hooks the real device slots while a panel is open.</li>
+        <li><strong><code>USER32!GetCursorPos</code> polling</strong> for mouse and camera. GML swaps the game's IAT slot and hands it a frozen cursor, so the game's self-computed deltas are zero.</li>
+      </ol>
+      <p>
+        Overlay panels also swallow keyboard and mouse messages in the subclassed
+        <code>WndProc</code>, so menu keys never reach the game's own UI. This is why typing in the
+        console does not move Rico and navigating the spawn menu does not spin the camera.
+      </p>
+
+      <h2 id="overlay">Overlay</h2>
+      <p>
+        The console hooks <code>IDXGISwapChain::Present</code> using a vtable address derived from
+        a throwaway device. The first frame teaches it the game's device, context and window. Text
+        is drawn through a GDI-rasterised glyph atlas: no font assets, no ImGui, and a much smaller
+        auditable footprint. D3D11 state is fully saved and restored around the draw.
+      </p>
+      <p>
+        The spawn menu is a second panel drawn by the same renderer. Opening one closes the other —
+        one panel owns the keyboard at a time.
+      </p>
+
+      <h2 id="seh">One SEH boundary</h2>
+      <p>
+        Exactly one file contains <code>__try</code>. Everything else calls through
+        <code>seh::Guard</code>, <code>seh::Call</code> or <code>seh::CallVoid</code> with POD
+        hand-off records. Every game call that may fault — spawn, vtable setters, the harvest
+        piggyback — is wrapped. A fault costs the feature, never the game.
+      </p>
+      <p>
+        Mods must not add their own <code>__try</code>; GML already wraps calls into mod code, and
+        nested handlers change how frames unwind.
+      </p>
+
+      <h2 id="game-model">The game model</h2>
+      <p>All JC3-specific knowledge lives in <code>game/</code> as data plus validated pointer chains:</p>
+      <ul>
+        <li><strong>Player chain.</strong> The local player manager leads to the network player and then the character. Position and health read and write through this chain.</li>
+        <li><strong>Teleport.</strong> The authoritative transform is the world matrix embedded in the interaction context reached from the character. Writing its translation row moves Rico and the engine keeps it. The obvious character transform is only engine output and gets reverted within a frame.</li>
+        <li><strong>Spawn.</strong> The spawn-system singleton calls an async spawn function with a model name, a matrix and flags. The callback arrives later, so handles are recorded and reported by <code>prop.status</code>.</li>
+        <li><strong>Harvest.</strong> Entity definition files carry a model-name property. A unique signature on the property getter is detoured at startup, and every streamed file contributes its name to the catalog.</li>
+      </ul>
+      <p>
+        Offset-based facts that are not signatures — embedded matrices, pointer-chain hops — live
+        in <code>Jc3Layout.h</code> with per-constant provenance and are validated at runtime, not
+        trusted. Exact addresses and evidence stay in the repository's RE write-up rather than
+        being copied around the web.
+      </p>
+
+      <h2 id="mods">Mods</h2>
+      <p>
+        A mod is a 64-bit DLL exporting <code>GML_ModInit</code> and optionally
+        <code>GML_ModShutdown</code>, described by <code>mod.json</code>. Load order comes from
+        <code>priority</code>; shutdown runs under SEH and anything forgotten is removed by owner.
+        The ABI is pure C, versioned by leading <code>size</code> fields, with each side freeing its
+        own memory. See <a href="mod-format.html">Mod format</a>.
+      </p>
+
+      <h2 id="why">Why it is shaped this way</h2>
+      <ul>
+        <li><strong>Fail visibly.</strong> Missing signatures are logged and surfaced as a result code, not papered over.</li>
+        <li><strong>Small trusted core.</strong> The proxy is trivial; the risky game calls are isolated and SEH-wrapped.</li>
+        <li><strong>Data-driven addresses.</strong> A new build means new signatures, not a new binary full of hard-coded offsets.</li>
+        <li><strong>Unload is a feature.</strong> Hooks, events and commands are owner-tracked so hot reload is real.</li>
+        <li><strong>No UI framework.</strong> The overlay stays a text renderer, which keeps the dependency surface and the frame cost down.</li>
+      </ul>
+
+      <p class="doc-meta">
+        Source: <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/ARCHITECTURE.md">docs/ARCHITECTURE.md</a>.
+        Exact pointer chains and evidence: <a href="https://github.com/FrostiestCode/GrappleModLoader/blob/main/docs/RE_PLAYER_CHAIN.md">docs/RE_PLAYER_CHAIN.md</a>.
+      </p>
+
+      <div class="pager">
+        <a href="api.html">← C++ API</a>
+        <a class="next" href="research.html">SIGNATURES &amp; RESEARCH →</a>
+      </div>
+    </div>
+  </article>
+</main>
+
+<footer>
+  <span>GRAPPLE MOD LOADER // JUST CAUSE 3 // MADE FOR THE COMMUNITY</span>
+  <span>
+    <a href="../features.html">FEATURES</a> //
+    <a href="../index.html">HOME</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader" target="_blank" rel="noopener noreferrer">GITHUB</a> //
+    <a href="https://github.com/FrostiestCode/GrappleModLoader/releases" target="_blank" rel="noopener noreferrer">RELEASES</a>
+  </span>
+</footer>
+</body>
+</html>
